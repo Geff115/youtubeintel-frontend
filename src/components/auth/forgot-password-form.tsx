@@ -58,7 +58,7 @@ export function ForgotPasswordForm() {
             Check your email
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
-            We've sent password reset instructions to <strong>{email}</strong>
+            We&apos;ve sent password reset instructions to <strong>{email}</strong>
           </p>
         </div>
 
@@ -93,7 +93,7 @@ export function ForgotPasswordForm() {
           </div>
 
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-6">
-            Didn't receive an email? Check your spam folder or try again in a few minutes.
+            Didn&apos;t receive an email? Check your spam folder or try again in a few minutes.
           </p>
         </div>
       </div>
@@ -117,7 +117,7 @@ export function ForgotPasswordForm() {
           Forgot your password?
         </h1>
         <p className="text-slate-600 dark:text-slate-400">
-          No worries! Enter your email and we'll send you reset instructions.
+          No worries! Enter your email and we&apos;ll send you reset instructions.
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export function ForgotPasswordForm() {
               <p className="text-sm text-red-600 dark:text-red-400">{validationError}</p>
             )}
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              We'll send password reset instructions to this email address.
+              We&apos;ll send password reset instructions to this email address.
             </p>
           </div>
 
