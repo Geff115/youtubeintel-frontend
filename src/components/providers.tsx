@@ -2,40 +2,39 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
-import { useEffect, useState } from 'react' // Add useEffect import
+import { useEffect, useState } from 'react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60 * 1000, // 1 minute
-            refetchOnWindowFocus: false,
-            retry: (failureCount, error: any) => {
-              // Don't retry on 401/403 errors
-              if (error?.response?.status === 401 || error?.response?.status === 403) {
-                return false
-              }
-              return failureCount < 3
-            },
-          },
-          mutations: {
-            retry: false,
-          },
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000,
+        refetchOnWindowFocus: false,
+        retry: (failureCount, error: any) => {
+          if (error?.response?.status === 401 || error?.response?.status === 403) {
+            return false
+          }
+          return failureCount < 3
         },
-      })
-  )
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  }))
 
-  // Add mounted state and effect
   const [mounted, setMounted] = useState(false)
+  
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Return only children until mounted
   if (!mounted) {
-    return <>{children}</>
+    return (
+      <div style={{ visibility: 'hidden' }}>
+        {children}
+      </div>
+    )
   }
 
   return (

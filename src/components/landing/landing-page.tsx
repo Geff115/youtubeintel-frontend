@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import {  Play, BarChart3, Search, Zap, Shield, Globe, Check, Menu, X, Star, ArrowRight, Database } from 'lucide-react'
+import { Play, BarChart3, Search, Zap, Shield, Globe, Check, Menu, X, Star, ArrowRight, Database } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
