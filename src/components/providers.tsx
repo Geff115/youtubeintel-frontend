@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
-import { useState } from 'react'
+import { useEffect, useState } from 'react' // Add useEffect import
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -27,13 +27,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   )
 
+  // Add mounted state and effect
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Return only children until mounted
+  if (!mounted) {
+    return <>{children}</>
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
-        defaultTheme="system"
+        defaultTheme="light"
         enableSystem
-        disableTransitionOnChange
+        disableTransitionOnChange={false}
+        storageKey="youtubeintel-theme"
       >
         {children}
       </ThemeProvider>

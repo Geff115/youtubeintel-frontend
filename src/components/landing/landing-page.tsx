@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChevronRight, Play, Users, BarChart3, Search, Zap, Shield, Globe, Check, Menu, X, Star, ArrowRight, TrendingUp, Database, Cpu } from 'lucide-react'
+import {  Play, BarChart3, Search, Zap, Shield, Globe, Check, Menu, X, Star, ArrowRight, Database } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
@@ -127,7 +127,7 @@ export function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen gradient-secondary">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
         isScrolled ? 'bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700' : 'bg-transparent'
@@ -160,7 +160,7 @@ export function LandingPage() {
                 <Button variant="ghost">Sign In</Button>
               </Link>
               <Link href="/auth/signup">
-                <Button className="gradient-primary">Get Started</Button>
+                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">Get Started</Button>
               </Link>
             </div>
 
@@ -219,7 +219,7 @@ export function LandingPage() {
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
               <Link href="/auth/signup">
-                <Button size="lg" className="gradient-primary text-lg px-8 py-4">
+                <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white">
                   Start Free Trial
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
@@ -279,7 +279,7 @@ export function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 gradient-secondary">
+      <section className="py-20 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
@@ -348,7 +348,7 @@ export function LandingPage() {
               }`}>
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="gradient-primary text-white px-4 py-1 rounded-full text-sm font-medium">
+                    <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-1 rounded-full text-sm font-medium">
                       Most Popular
                     </span>
                   </div>
@@ -382,7 +382,7 @@ export function LandingPage() {
                   <Button 
                     className={`w-full ${
                       plan.popular
-                        ? 'gradient-primary hover:opacity-90'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
                         : 'border border-slate-300 dark:border-slate-600 bg-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600'
                     }`}
                     variant={plan.popular ? "default" : "outline"}
@@ -406,7 +406,7 @@ export function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 gradient-primary">
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
             Ready to Unlock YouTube's Intelligence?
@@ -434,7 +434,7 @@ export function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                   <Play className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-xl font-bold">YouTubeIntel</span>
