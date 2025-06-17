@@ -93,8 +93,14 @@ export function SignUpForm() {
   }
 
   const handleGoogleSignUp = async () => {
-    // TODO: Implement Google OAuth
-    alert('Google Sign Up will be implemented in the next step')
+    clearError()
+    try {
+      await signupWithGoogle()
+      router.push('/signin')
+    } catch (error: any) {
+      // Error is handled by the store
+      console.error('Google sign-up failed:', error)
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
