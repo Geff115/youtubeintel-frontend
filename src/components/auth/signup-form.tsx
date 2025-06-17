@@ -121,7 +121,7 @@ export function SignUpForm() {
             Account Created!
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
-            We've sent a verification email to <strong>{formData.email}</strong>
+            We&apos;ve sent a verification email to <strong>{formData.email}</strong>
           </p>
         </div>
 
@@ -153,7 +153,7 @@ export function SignUpForm() {
           </div>
 
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-6">
-            Didn't receive an email? Check your spam folder or{' '}
+            Didn&apos;t receive an email? Check your spam folder or{' '}
             <button className="text-blue-600 dark:text-blue-400 hover:underline">
               resend verification
             </button>
