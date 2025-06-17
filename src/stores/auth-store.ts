@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authAPI, handleAPIError } from '@/lib/api'
+import { GoogleAuthHelper, GoogleUser } from '@/lib/google-auth'
 import type { User } from '@/types/auth'
 
 interface AuthState {
@@ -11,9 +12,9 @@ interface AuthState {
   
   // Actions
   signin: (email: string, password: string) => Promise<void>
-  signinWithGoogle: (idToken: string) => Promise<void>
+  signinWithGoogle: () => Promise<void>
   signup: (data: SignupData) => Promise<void>
-  signupWithGoogle: (data: GoogleSignupData) => Promise<void>
+  signupWithGoogle: (ageConfirmed?: boolean, agreedToTerms?: boolean) => Promise<void>
   signout: () => Promise<void>
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (token: string, newPassword: string) => Promise<void>
@@ -30,12 +31,6 @@ interface SignupData {
   password: string
   first_name: string
   last_name: string
-  age_confirmed: boolean
-  agreed_to_terms: boolean
-}
-
-interface GoogleSignupData {
-  id_token: string
   age_confirmed: boolean
   agreed_to_terms: boolean
 }
@@ -72,20 +67,34 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signinWithGoogle: async (idToken: string) => {
+      signinWithGoogle: async () => {
         set({ isLoading: true, error: null })
         try {
-          const response = await authAPI.signinWithGoogle({ id_token: idToken })
+          // Initialize Google Auth
+          const googleAuth = GoogleAuthHelper.getInstance()
+          await googleAuth.initializeGoogleSignIn()
           
-          // Store tokens
-          localStorage.setItem('access_token', response.access_token)
-          localStorage.setItem('refresh_token', response.refresh_token)
+          // Get ID token from Google
+          const credential = await googleAuth.signInWithPopup()
           
-          set({ 
-            user: response.user, 
-            isAuthenticated: true, 
-            isLoading: false 
-          })
+          // Send to backend
+          const response = await authAPI.signinWithGoogle({ id_token: credential })
+          
+          if (response.access_token) {
+            // Store tokens
+            localStorage.setItem('access_token', response.access_token)
+            localStorage.setItem('refresh_token', response.refresh_token)
+            
+            set({ 
+              user: response.user, 
+              isAuthenticated: true, 
+              isLoading: false 
+            })
+          } else if (response.signup_required) {
+            // User needs to complete signup
+            set({ isLoading: false })
+            throw new Error('Account not found. Please sign up first.')
+          }
         } catch (error: any) {
           const apiError = handleAPIError(error)
           set({ 
@@ -112,10 +121,23 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signupWithGoogle: async (data: GoogleSignupData) => {
+      signupWithGoogle: async (ageConfirmed = false, agreedToTerms = false) => {
         set({ isLoading: true, error: null })
         try {
-          const response = await authAPI.signupWithGoogle(data)
+          // Initialize Google Auth
+          const googleAuth = GoogleAuthHelper.getInstance()
+          await googleAuth.initializeGoogleSignIn();
+          
+          // Get ID token from Google
+          const credential = await googleAuth.signInWithPopup()
+          
+          // Send to backend
+          const response = await authAPI.signupWithGoogle({
+            id_token: credential,
+            age_confirmed: ageConfirmed,
+            agreed_to_terms: agreedToTerms,
+          })
+          
           set({ isLoading: false })
           return response
         } catch (error: any) {
@@ -268,4 +290,4 @@ export const useAuthStore = create<AuthState>()(
       }),
     }
   )
-) 
+)
