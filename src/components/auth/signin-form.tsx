@@ -214,7 +214,7 @@ export function SignInForm() {
 
         {/* Sign Up Link */}
         <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link 
             href="/auth/signup" 
             className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
