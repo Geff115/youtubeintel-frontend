@@ -206,7 +206,7 @@ export function LandingPage() {
             </div>
             
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 dark:text-white mb-6">
-              Discover YouTube's
+              Discover YouTube&apos;s
               <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Hidden Intelligence
               </span>
@@ -409,7 +409,7 @@ export function LandingPage() {
       <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-            Ready to Unlock YouTube's Intelligence?
+            Ready to Unlock YouTube&apos;s Intelligence?
           </h2>
           <p className="text-xl text-blue-100 mb-8">
             Join thousands of creators, marketers, and researchers who trust YouTubeIntel 
