@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuthStore } from '@/stores/auth-store'
+import { clear } from 'console'
 
 export function SignInForm() {
   const router = useRouter()
@@ -56,9 +57,14 @@ export function SignInForm() {
   }
 
   const handleGoogleSignIn = async () => {
-    // TODO: Implement Google OAuth
-    // For now, show a placeholder
-    alert('Google Sign In will be implemented in the next step')
+    clearError()
+    try {
+      await signinWithGoogle()
+      router.push(redirectTo)
+    } catch (error: any) {
+      // Error is handled by the store
+      console.error('Google sign-in failed:', error)
+    }
   }
 
   const handleInputChange = (field: string, value: string) => {
@@ -90,75 +96,81 @@ export function SignInForm() {
           Welcome back
         </h1>
         <p className="text-slate-600 dark:text-slate-400">
-          Sign in to your account to continue
+          Sign in to access your YouTube intelligence dashboard
         </p>
       </div>
 
-      {/* Sign In Form */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+      {/* Main Card */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-8">
         {/* Error Alert */}
         {error && (
-          <Alert className="mb-6 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+          <Alert className="mb-6 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
             <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <AlertDescription className="text-red-700 dark:text-red-400">
+            <AlertDescription className="text-red-700 dark:text-red-300">
               {error}
             </AlertDescription>
           </Alert>
         )}
 
+        {/* Sign In Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Field */}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
+          <div>
+            <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">
+              Email address
+            </Label>
             <Input
               id="email"
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
+              className="mt-1"
               placeholder="Enter your email"
-              className={validationErrors.email ? 'border-red-500 focus:border-red-500' : ''}
               disabled={isLoading}
             />
             {validationErrors.email && (
-              <p className="text-sm text-red-600 dark:text-red-400">{validationErrors.email}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {validationErrors.email}
+              </p>
             )}
           </div>
 
-          {/* Password Field */}
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
+          <div>
+            <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">
+              Password
+            </Label>
+            <div className="relative mt-1">
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
                 placeholder="Enter your password"
-                className={validationErrors.password ? 'border-red-500 focus:border-red-500 pr-10' : 'pr-10'}
                 disabled={isLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 disabled={isLoading}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             {validationErrors.password && (
-              <p className="text-sm text-red-600 dark:text-red-400">{validationErrors.password}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {validationErrors.password}
+              </p>
             )}
-            
-            {/* Forgot Password Link */}
-            <div className="flex justify-end">
-              <Link 
-                href="/auth/forgot-password" 
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-              >
-                Forgot password?
-              </Link>
-            </div>
+          </div>
+
+          {/* Forgot Password Link */}
+          <div className="text-right">
+            <Link 
+              href="/auth/forgot-password" 
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+            >
+              Forgot your password?
+            </Link>
           </div>
 
           {/* Sign In Button */}
