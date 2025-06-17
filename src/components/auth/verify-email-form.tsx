@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Play, Loader2, AlertCircle, CheckCircle, Mail, RefreshCw } from 'lucide-react'
@@ -20,21 +20,21 @@ export function VerifyEmailForm() {
   const [showResendForm, setShowResendForm] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
 
-  // Auto-verify if token is present
-  useEffect(() => {
-    if (token) {
-      handleVerification(token)
-    }
-  }, [token])
-
-  const handleVerification = async (verificationToken: string) => {
+  const handleVerification = useCallback(async (verificationToken: string) => {
     try {
       await verifyEmail(verificationToken)
       setVerificationStatus('success')
     } catch (error) {
       setVerificationStatus('error')
     }
-  }
+  }, [verifyEmail])
+
+  // Auto-verify if token is present
+  useEffect(() => {
+    if (token) {
+      handleVerification(token)
+    }
+  }, [token, handleVerification])
 
   const handleResendVerification = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,7 +88,7 @@ export function VerifyEmailForm() {
             </Button>
             
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              You'll get <strong>25 free credits</strong> to start discovering channels!
+              You&apos;ll get <strong>25 free credits</strong> to start discovering channels!
             </p>
           </div>
         </div>
@@ -168,7 +168,7 @@ export function VerifyEmailForm() {
               New link sent!
             </h1>
             <p className="text-slate-600 dark:text-slate-400">
-              We've sent a new verification link to <strong>{resendEmail}</strong>
+              We&apos;ve sent a new verification link to <strong>{resendEmail}</strong>
             </p>
           </div>
 
@@ -237,7 +237,7 @@ export function VerifyEmailForm() {
                 autoFocus
               />
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                We'll send a new verification link to this email address.
+                We&apos;ll send a new verification link to this email address.
               </p>
             </div>
 
