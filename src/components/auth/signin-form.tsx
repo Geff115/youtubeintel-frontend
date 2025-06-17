@@ -74,7 +74,7 @@ export function SignInForm() {
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-sm">
       {/* Header */}
       <div className="text-center mb-8">
         <Link href="/" className="inline-flex items-center space-x-2 mb-6">
@@ -95,7 +95,7 @@ export function SignInForm() {
       </div>
 
       {/* Sign In Form */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-8">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
         {/* Error Alert */}
         {error && (
           <Alert className="mb-6 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
@@ -106,7 +106,7 @@ export function SignInForm() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           {/* Email Field */}
           <div className="space-y-2">
             <Label htmlFor="email">Email address</Label>
@@ -126,15 +126,7 @@ export function SignInForm() {
 
           {/* Password Field */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link 
-                href="/auth/forgot-password" 
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-              >
-                Forgot password?
-              </Link>
-            </div>
+            <Label htmlFor="password">Password</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -157,12 +149,22 @@ export function SignInForm() {
             {validationErrors.password && (
               <p className="text-sm text-red-600 dark:text-red-400">{validationErrors.password}</p>
             )}
+            
+            {/* Forgot Password Link */}
+            <div className="flex justify-end">
+              <Link 
+                href="/auth/forgot-password" 
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           {/* Sign In Button */}
           <Button 
             type="submit" 
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white mt-6"
             disabled={isLoading}
           >
             {isLoading ? (

@@ -19,11 +19,6 @@ const nextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
 
-  // Environment variables
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
-  },
-
   // Headers for security
   async headers() {
     return [
@@ -99,6 +94,8 @@ const nextConfig = {
 
   // React strict mode
   reactStrictMode: true,
+
+  swcMinify: true, // Enable SWC minification
 
   // Note: swcMinify is now enabled by default in Next.js 15
 }
