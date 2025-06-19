@@ -1,20 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Play, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CheckCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuthStore } from '@/stores/auth-store'
-import { clear } from 'console'
 
 export function SignInForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const signupSuccess = searchParams.get('signup') === 'success'
   
   const { signin, signinWithGoogle, isLoading, error, clearError } = useAuthStore()
   
@@ -24,6 +25,18 @@ export function SignInForm() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+
+  // Effect to clear success message from URL after showing
+  useEffect(() => {
+    if (signupSuccess) {
+      // Clear the signup parameter from URL after a short delay
+      const timer = setTimeout(() => {
+        router.replace('/auth/signin', { scroll: false })
+      }, 5000) // Clear after 5 seconds
+      
+      return () => clearTimeout(timer)
+    }
+  }, [signupSuccess, router])
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
@@ -99,6 +112,16 @@ export function SignInForm() {
           Sign in to access your YouTube intelligence dashboard
         </p>
       </div>
+
+      {/* Success Alert - Add this section */}
+      {signupSuccess && (
+        <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="text-green-700 dark:text-green-300">
+            Sign up successful! You can now sign in to your account.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Main Card */}
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-8">

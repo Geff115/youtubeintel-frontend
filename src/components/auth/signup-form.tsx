@@ -87,6 +87,7 @@ export function SignUpForm() {
     try {
       await signup(formData)
       setSignupSuccess(true)
+      router.push('/auth/signin?signup=success')
     } catch (error) {
       // Error is handled by the store
     }
@@ -96,7 +97,8 @@ export function SignUpForm() {
     clearError()
     try {
       await signupWithGoogle()
-      router.push('/signin')
+      // Redirect to sign-in page with success message
+      router.push('/auth/signin?signup=success')
     } catch (error: any) {
       // Error is handled by the store
       console.error('Google sign-up failed:', error)
