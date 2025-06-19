@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { 
   Menu, 
   Bell, 
@@ -44,13 +44,30 @@ const pageTitles: Record<string, string> = {
 
 export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, signout } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
 
   const pageTitle = pageTitles[pathname] || 'Dashboard'
 
   const handleSignOut = async () => {
-    await signout()
+    try {
+      await signout()
+      // Clear any remaining data
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      router.push('/')
+    } catch (error) {
+      console.error('Signout error:', error)
+      // Force cleanup even if API fails
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      router.push('/')
+    }
   }
 
   return (

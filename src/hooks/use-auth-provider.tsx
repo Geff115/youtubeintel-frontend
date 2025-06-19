@@ -91,11 +91,36 @@ export function useAuthProvider() {
       document.cookie = `access_token=${token}; path=/; max-age=${24 * 60 * 60}; secure; samesite=strict`
       document.cookie = `refresh_token=${refreshToken}; path=/; max-age=${30 * 24 * 60 * 60}; secure; samesite=strict`
     } else {
-      // Clear cookies
+      // Clear cookies when not authenticated
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
       document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     }
   }, [isAuthenticated, user])
+
+  // Handle signout cleanup
+  const handleSignout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token')
+      await signout()
+      
+      // Force clear everything
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      
+      // Redirect to home page
+      router.push('/')
+    } catch (error) {
+      console.error('Signout error:', error)
+      // Even if API call fails, clear local state
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      router.push('/')
+    }
+  }
 
   return {
     isInitialized,
