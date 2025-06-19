@@ -1,4 +1,21 @@
 // User dashboard and stats types
+export interface User {
+  id: string
+  email: string
+  name: string
+  first_name?: string
+  last_name?: string
+  age_confirmed: boolean
+  agreed_to_terms: boolean
+  created_at: string
+  updated_at: string
+  last_login_at?: string
+  profile_picture?: string
+  is_admin: boolean
+  is_verified: boolean
+  is_active: boolean
+}
+
 export interface UserStats {
   total_channels: number
   channels_with_metadata: number
