@@ -16,9 +16,15 @@ import {
   Activity
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useSystemHealth } from '@/hooks/use-dashboard-data'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'System Status',
+  description: 'Real-time status of YouTubeIntel services',
+}
 
 export default function SystemStatusPage() {
   const { data: healthData, isLoading, error, refetch } = useSystemHealth()

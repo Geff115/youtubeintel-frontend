@@ -18,6 +18,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useCurrentUser, useCreditPackages } from '@/hooks/use-dashboard-data'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Credits & Billing',
+  description: 'Purchase credits and manage your YouTubeIntel billing',
+}
 
 export default function CreditsPage() {
   const { data: userData, isLoading: userLoading } = useCurrentUser()

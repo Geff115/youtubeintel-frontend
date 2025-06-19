@@ -13,6 +13,7 @@ import {
   Play,
   Home,
   Users,
+  Activity,
   FileText,
   LogOut,
   X
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Jobs', href: '/dashboard/jobs', icon: Database },
   { name: 'Credits', href: '/dashboard/credits', icon: CreditCard },
+  { name: 'Status', href: '/dashboard/status', icon: Activity },
 ]
 
 const secondaryNavigation = [

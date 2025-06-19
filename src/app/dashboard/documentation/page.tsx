@@ -20,6 +20,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Documentation',
+  description: 'Complete guide to using YouTubeIntel',
+}
 
 export default function DocumentationPage() {
   const [searchQuery, setSearchQuery] = useState('')
