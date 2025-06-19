@@ -12,9 +12,9 @@ interface AuthState {
   
   // Actions
   signin: (email: string, password: string) => Promise<void>
-  signinWithGoogle: () => Promise<void>
+  signinWithGoogle: (credential: string) => Promise<void>
   signup: (data: SignupData) => Promise<void>
-  signupWithGoogle: (ageConfirmed?: boolean, agreedToTerms?: boolean) => Promise<void>
+  signupWithGoogle: (credential: string, ageConfirmed?: boolean, agreedToTerms?: boolean) => Promise<void>
   signout: () => Promise<void>
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (token: string, newPassword: string) => Promise<void>
@@ -67,18 +67,11 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signinWithGoogle: async () => {
+      signinWithGoogle: async (credential: string) => {
         set({ isLoading: true, error: null })
         try {
-          // Initialize Google Auth
-          const googleAuth = GoogleAuthHelper.getInstance()
-          await googleAuth.initializeGoogleSignIn()
-          
-          // Get ID token from Google
-          const credential = await googleAuth.signInWithPopup()
-          
           // Send to backend
-          const response = await authAPI.signinWithGoogle({ id_token: credential })
+          const response = await authAPI.signinWithGoogle({ id_token: credential });
           
           if (response.access_token) {
             // Store tokens
@@ -121,16 +114,9 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      signupWithGoogle: async (ageConfirmed = false, agreedToTerms = false) => {
+      signupWithGoogle: async (credential: string, ageConfirmed = true, agreedToTerms = true) => {
         set({ isLoading: true, error: null })
         try {
-          // Initialize Google Auth
-          const googleAuth = GoogleAuthHelper.getInstance()
-          await googleAuth.initializeGoogleSignIn();
-          
-          // Get ID token from Google
-          const credential = await googleAuth.signInWithPopup()
-          
           // Send to backend
           const response = await authAPI.signupWithGoogle({
             id_token: credential,
