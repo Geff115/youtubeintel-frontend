@@ -12,8 +12,8 @@ import {
   Settings, 
   Play,
   Home,
+  TrendingUp,
   Users,
-  Activity,
   FileText,
   LogOut,
   X
@@ -32,10 +32,10 @@ const navigation = [
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Jobs', href: '/dashboard/jobs', icon: Database },
   { name: 'Credits', href: '/dashboard/credits', icon: CreditCard },
-  { name: 'Status', href: '/dashboard/status', icon: Activity },
 ]
 
 const secondaryNavigation = [
+  { name: 'Status', href: '/dashboard/status', icon: TrendingUp },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   { name: 'Documentation', href: '/docs', icon: FileText },
 ]
