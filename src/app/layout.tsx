@@ -4,7 +4,13 @@ import './globals.css'
 import { Providers } from '@/components/providers'
 import { AuthProvider } from '@/hooks/use-auth-provider'
 
-const inter = Inter({ subsets: ['latin'] })
+// Configure Inter font with fallbacks
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  fallback: ['system-ui', 'arial'],
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
@@ -61,9 +67,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
+      <head>
+        {/* Preload critical fonts */}
+        <link
+          rel="preload"
+          href="/fonts/inter-var.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body className={`${inter.className} font-sans antialiased`}>
         <Providers>
           <AuthProvider>
             {children}

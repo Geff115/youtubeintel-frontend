@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { userAPI, channelAPI, authAPI } from '@/lib/api'
+import { userAPI, channelAPI, authAPI, api } from '@/lib/api'
 import type { UserStats, ChannelsResponse, ProcessingJob, User } from '@/types/dashboard'
 
 // ==========================================
@@ -105,11 +105,11 @@ export function useCreditPackages() {
   return useQuery({
     queryKey: ['credit-packages'],
     queryFn: async () => {
-      const response = await fetch('/api/credit-packages')
-      if (!response.ok) {
+      const response = await api.get('/api/credit-packages')
+      if (response.status < 200 || response.status >= 300) {
         throw new Error('Failed to fetch credit packages')
       }
-      return response.json()
+      return response.data
     },
     staleTime: 300000, // Credit packages don't change often (5 minutes)
   })
@@ -138,24 +138,11 @@ export function usePurchaseCredits() {
   
   return useMutation({
     mutationFn: async ({ packageId, email }: { packageId: string; email: string }) => {
-      const response = await fetch('/api/purchase-credits', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: JSON.stringify({
-          package_id: packageId,
-          email: email
-        })
+      const response = await api.post('/api/purchase-credits', {
+        package_id: packageId,
+        email: email
       })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Purchase failed')
-      }
-      
-      return response.json()
+      return response.data
     },
     onSuccess: (data, variables) => {
       // Invalidate relevant queries after successful purchase

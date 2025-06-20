@@ -1,12 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable experimental features (updated for Next.js 15)
+  // Use experimental.serverComponentsExternalPackages for Next.js 14
   experimental: {
-    // Add any experimental features you need here
+    serverComponentsExternalPackages: ['bcryptjs']
   },
-
-  // Server external packages (moved from experimental in Next.js 15)
-  serverExternalPackages: [],
 
   // Image optimization
   images: {
@@ -97,7 +94,15 @@ const nextConfig = {
 
   swcMinify: true, // Enable SWC minification
 
-  // Note: swcMinify is now enabled by default in Next.js 15
+  // Disable font optimization if having network issues
+  optimizeFonts: false,
+
+  // Environment variables
+  env: {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  },
 }
 
 module.exports = nextConfig

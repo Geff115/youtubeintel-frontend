@@ -11,23 +11,29 @@ import {
   ArrowRight,
   Shield,
   Clock,
-  Star
+  Star,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useCurrentUser, useCreditPackages } from '@/hooks/use-dashboard-data'
-
+import { useCurrentUser, useCreditPackages, usePurchaseCredits } from '@/hooks/use-dashboard-data'
 
 export default function CreditsPage() {
   const { data: userData, isLoading: userLoading } = useCurrentUser()
-  const { data: packagesData, isLoading: packagesLoading } = useCreditPackages()
+  const { data: packagesData, isLoading: packagesLoading, error: packagesError } = useCreditPackages()
+  const purchaseCredits = usePurchaseCredits()
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
-  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
   const [purchaseError, setPurchaseError] = useState('')
+  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
 
   const user = userData?.user
+
+  // Debug logging
+  console.log('Packages Data:', packagesData)
+  console.log('Packages Loading:', packagesLoading)
+  console.log('Packages Error:', packagesError)
 
   const handlePurchase = async (packageId: string) => {
     if (!user?.email) {
@@ -35,32 +41,23 @@ export default function CreditsPage() {
       return
     }
 
-    setPurchaseLoading(packageId)
     setPurchaseError('')
-
+    setPurchaseLoading(packageId)
+    
     try {
-      const response = await fetch('/api/purchase-credits', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: JSON.stringify({
-          package_id: packageId,
-          email: user.email
-        })
+      const result = await purchaseCredits.mutateAsync({
+        packageId,
+        email: user.email
       })
 
-      const data = await response.json()
-
-      if (data.success) {
+      if (result.success) {
         // Redirect to Korapay checkout
-        window.open(data.checkout_url, '_blank')
+        window.open(result.checkout_url, '_blank')
       } else {
-        setPurchaseError(data.error || 'Purchase failed')
+        setPurchaseError(result.error || 'Purchase failed')
       }
-    } catch (error) {
-      setPurchaseError('Network error. Please try again.')
+    } catch (error: any) {
+      setPurchaseError(error.message || 'Purchase failed')
       console.error('Purchase error:', error)
     } finally {
       setPurchaseLoading(null)
@@ -76,7 +73,7 @@ export default function CreditsPage() {
     "Email support and assistance"
   ]
 
-  if (userLoading || packagesLoading) {
+  if (userLoading) {
     return (
       <div className="space-y-6">
         <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-64 animate-pulse" />
@@ -130,17 +127,75 @@ export default function CreditsPage() {
         </Alert>
       )}
 
+      {/* Packages Error Alert */}
+      {packagesError && (
+        <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+          <AlertDescription className="text-red-700 dark:text-red-400">
+            Failed to load credit packages: {packagesError.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Debug Info - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
+          <CardHeader>
+            <CardTitle className="text-sm">Debug Info</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs space-y-1">
+              <div>Packages Loading: {packagesLoading ? 'Yes' : 'No'}</div>
+              <div>Packages Error: {packagesError ? packagesError.message : 'None'}</div>
+              <div>Packages Data: {packagesData ? 'Loaded' : 'Not loaded'}</div>
+              <div>User: {user?.email || 'Not loaded'}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Credit Packages */}
-      {packagesData?.packages && (
+      {packagesLoading && (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
+            Loading Credit Packages...
+          </h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-96 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!packagesLoading && !packagesError && !packagesData?.packages && (
+        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-yellow-600 dark:text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+              No Credit Packages Available
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Credit packages are not currently available. Please try again later or contact support.
+            </p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh Page
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {packagesData?.packages && Object.keys(packagesData.packages).length > 0 && (
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
             Choose Your Credit Package
           </h2>
           
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 text-center">
             {Object.entries(packagesData.packages).map(([packageId, packageInfo]: [string, any]) => {
               const isPopular = packageId === 'credits_500' // Most popular package
-              const isPurchasing = purchaseLoading === packageId
+              const isPurchasing = purchaseCredits.isPending && selectedPackage === packageId
               
               return (
                 <Card key={packageId} className={`relative transition-all duration-200 hover:shadow-lg hover:scale-105 ${
@@ -191,8 +246,11 @@ export default function CreditsPage() {
                           : ''
                       }`}
                       variant={isPopular ? 'default' : 'outline'}
-                      onClick={() => handlePurchase(packageId)}
-                      disabled={isPurchasing}
+                      onClick={() => {
+                        setSelectedPackage(packageId)
+                        handlePurchase(packageId)
+                      }}
+                      disabled={isPurchasing || purchaseCredits.isPending}
                     >
                       {isPurchasing ? (
                         <>
