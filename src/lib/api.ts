@@ -114,6 +114,53 @@ export interface APIResponse<T = any> {
   error?: string
 }
 
+// User Deletion Types
+export interface DeletionEligibilityResponse {
+  can_delete: boolean
+  user: {
+    email: string
+    credits_balance: number
+    total_credits_purchased: number
+    account_age_days: number
+    last_activity: string | null
+  }
+  blockers: Array<{
+    type: string
+    message: string
+    action: string
+  }>
+  warnings: Array<{
+    type: string
+    message: string
+    action: string
+  }>
+  data_to_be_deleted: string[]
+  support_contact: string
+}
+
+export interface DataExportResponse {
+  success: boolean
+  message: string
+  data: {
+    account_info: any
+    credit_transactions: any[]
+    api_usage_logs: any[]
+    export_metadata: {
+      exported_at: string
+      export_version: string
+      total_transactions: number
+      total_api_calls: number
+    }
+  }
+  notes: string[]
+}
+
+export interface AccountDeletionResponse {
+  success: boolean
+  message: string
+  details: string
+}
+
 // Auth related API calls
 export const authAPI = {
   // Sign up with email and password
@@ -253,6 +300,25 @@ export const userAPI = {
   // Get specific job status
   getJobStatus: async (jobId: string) => {
     const response = await api.get(`/api/jobs/${jobId}`)
+    return response.data
+  },
+
+  // User account management API calls
+  // Check if user can delete their account
+  checkDeletionEligibility: async () => {
+    const response = await api.get('/api/user/deletion-eligibility')
+    return response.data
+  },
+
+  // Request data export (GDPR compliance)
+  requestDataExport: async () => {
+    const response = await api.post('/api/user/request-data-export')
+    return response.data
+  },
+
+  // Delete user account (destructive operation)
+  deleteAccount: async () => {
+    const response = await api.delete('/api/user/delete-account')
     return response.data
   },
 }

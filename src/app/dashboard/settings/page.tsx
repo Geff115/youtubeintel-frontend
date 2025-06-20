@@ -10,7 +10,10 @@ import {
   AlertTriangle,
   CheckCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Download,
+  AlertCircle,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +23,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { useCurrentUser, useUpdateProfile, useChangePassword, useUserSessions, useRevokeSession } from '@/hooks/use-dashboard-data'
 import { useAuthStore } from '@/stores/auth-store'
+import { userAPI } from '@/lib/api'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -56,6 +60,25 @@ export default function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  type DeletionEligibility = {
+    can_delete: boolean
+    user: {
+      email: string
+      credits_balance: number
+      account_age_days: number
+      total_credits_purchased: number
+    }
+    blockers: { message: string; action: string }[]
+    warnings: { message: string; action: string }[]
+    support_contact: string
+    data_to_be_deleted: string[]
+  }
+  const [deletionEligibility, setDeletionEligibility] = useState<DeletionEligibility | null>(null)
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [deletionError, setDeletionError] = useState('')
 
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -110,11 +133,73 @@ export default function SettingsPage() {
     }
   }
 
+  // Function to check deletion eligibility
+  const checkDeletionEligibility = async () => {
+    try {
+      const response = await userAPI.checkDeletionEligibility()
+      setDeletionEligibility(response)
+    } catch (error: any) {
+      setDeletionError(error.response?.data?.error || 'Failed to check deletion eligibility')
+    }
+  }
+
+  // Function to handle data export
+  const handleExportData = async () => {
+    try {
+      setExportLoading(true)
+      const response = await userAPI.requestDataExport()
+      
+      // Create and download JSON file
+      const dataStr = JSON.stringify(response.data, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `youtubeintel-data-export-${new Date().toISOString().split('T')[0]}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+      
+    } catch (error: any) {
+      setDeletionError(error.response?.data?.error || 'Failed to export data')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   // Handle account deletion
   const handleDeleteAccount = async () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      // This would require implementing delete account API
-      alert('Account deletion is not implemented yet. Please contact support.')
+    if (!deletionEligibility) {
+      await checkDeletionEligibility()
+      return
+    }
+
+    if (!deletionEligibility.can_delete) {
+      setDeletionError('Account cannot be deleted at this time. Please resolve the issues listed above.')
+      return
+    }
+
+    if (deleteConfirmText !== 'DELETE MY ACCOUNT') {
+      setDeletionError('Please type "DELETE MY ACCOUNT" to confirm deletion')
+      return
+    }
+
+    try {
+      setDeleteLoading(true)
+      setDeletionError('')
+      
+      const response = await userAPI.deleteAccount()
+      
+      // Account deleted successfully
+      alert(response.message + '\n\nYou will now be redirected to the home page.')
+      
+      // Sign out and redirect
+      await signout()
+      router.push('/')
+      
+    } catch (error: any) {
+      setDeletionError(error.response?.data?.error || 'Failed to delete account')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -396,20 +481,241 @@ export default function SettingsPage() {
           {/* Danger Zone */}
           <Card className="border-red-200 dark:border-red-800">
             <CardHeader>
-              <CardTitle className="flex items-center text-lg text-red-600 dark:text-red-400">
-                <AlertTriangle className="w-5 h-5 mr-2" />
-                Danger Zone
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                variant="outline"
-                className="w-full border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                onClick={handleDeleteAccount}
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
+              <CardTitle className="flex items-center text-red-600 dark:text-red-400">
+                <Trash2 className="w-5 h-5 mr-2" />
                 Delete Account
-              </Button>
+              </CardTitle>
+              <CardDescription>
+                Permanently delete your account and all associated data
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Check Eligibility Button */}
+              {!deletionEligibility && (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Before you can delete your account, we need to check if your account is eligible for deletion.
+                  </p>
+                  <Button 
+                    onClick={checkDeletionEligibility}
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                  >
+                    Check Deletion Eligibility
+                  </Button>
+                </div>
+              )}
+
+              {/* Deletion Eligibility Results */}
+              {deletionEligibility && (
+                <div className="space-y-4">
+                  {/* Account Information */}
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
+                    <h4 className="font-medium text-slate-900 dark:text-white mb-2">Account Summary</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-slate-600 dark:text-slate-400">Email:</span>
+                        <p className="font-medium">{deletionEligibility.user.email}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-600 dark:text-slate-400">Credits:</span>
+                        <p className="font-medium">{deletionEligibility.user.credits_balance}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-600 dark:text-slate-400">Account Age:</span>
+                        <p className="font-medium">{deletionEligibility.user.account_age_days} days</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-600 dark:text-slate-400">Total Purchased:</span>
+                        <p className="font-medium">{deletionEligibility.user.total_credits_purchased} credits</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Blockers */}
+                  {deletionEligibility.blockers.length > 0 && (
+                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+                      <X className="h-4 w-4 text-red-600 dark:text-red-400" />
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-medium text-red-700 dark:text-red-400">Cannot Delete Account:</p>
+                          {deletionEligibility.blockers.map((blocker: any, index: any) => (
+                            <div key={index} className="text-sm">
+                              <p className="text-red-700 dark:text-red-400">{blocker.message}</p>
+                              <p className="text-red-600 dark:text-red-500">{blocker.action}</p>
+                            </div>
+                          ))}
+                          <p className="text-sm text-red-600 dark:text-red-500 mt-2">
+                            Contact: {deletionEligibility.support_contact}
+                          </p>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Warnings */}
+                  {deletionEligibility.warnings.length > 0 && (
+                    <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-medium text-yellow-700 dark:text-yellow-400">Important Warnings:</p>
+                          {deletionEligibility.warnings.map((warning: any, index: any) => (
+                            <div key={index} className="text-sm">
+                              <p className="text-yellow-700 dark:text-yellow-400">{warning.message}</p>
+                              <p className="text-yellow-600 dark:text-yellow-500">{warning.action}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Data Export */}
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-slate-900 dark:text-white">Export Your Data</h4>
+                      <Button
+                        onClick={handleExportData}
+                        disabled={exportLoading}
+                        variant="outline"
+                        size="sm"
+                      >
+                        {exportLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Exporting...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 mr-2" />
+                            Export Data
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      Download all your account data before deletion (GDPR compliance)
+                    </p>
+                  </div>
+
+                  {/* Data to be Deleted */}
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                    <h4 className="font-medium text-slate-900 dark:text-white mb-2">Data That Will Be Deleted</h4>
+                    <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                      {deletionEligibility.data_to_be_deleted.map((item, index) => (
+                        <li key={index} className="flex items-center">
+                          <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Deletion Section */}
+                  {deletionEligibility.can_delete && (
+                    <div className="border-2 border-red-200 dark:border-red-800 rounded-lg p-4 bg-red-50 dark:bg-red-900/10">
+                      <div className="space-y-4">
+                        <div className="flex items-center mb-2">
+                          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
+                          <h4 className="font-bold text-red-700 dark:text-red-400">Danger Zone</h4>
+                        </div>
+                        
+                        <div className="text-sm text-red-700 dark:text-red-400">
+                          <p className="font-medium mb-2">This action cannot be undone. This will permanently:</p>
+                          <ul className="list-disc list-inside space-y-1 ml-4">
+                            <li>Delete your account and profile</li>
+                            <li>Remove all credit balances and transaction history</li>
+                            <li>Clear all API usage logs and session data</li>
+                            <li>Revoke access to all YouTubeIntel services</li>
+                          </ul>
+                        </div>
+
+                        {!showDeleteConfirmation ? (
+                          <Button
+                            onClick={() => setShowDeleteConfirmation(true)}
+                            variant="destructive"
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete My Account
+                          </Button>
+                        ) : (
+                          <div className="space-y-4 p-4 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-red-900/20">
+                            <div>
+                              <Label className="text-red-700 dark:text-red-400 font-medium">
+                                Type "DELETE MY ACCOUNT" to confirm:
+                              </Label>
+                              <Input
+                                type="text"
+                                value={deleteConfirmText}
+                                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                className="mt-2 border-red-300 dark:border-red-700 focus:ring-red-500 focus:border-red-500"
+                                placeholder="DELETE MY ACCOUNT"
+                              />
+                            </div>
+                            
+                            <div className="flex space-x-3">
+                              <Button
+                                onClick={handleDeleteAccount}
+                                disabled={deleteConfirmText !== 'DELETE MY ACCOUNT' || deleteLoading}
+                                variant="destructive"
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                {deleteLoading ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Confirm Deletion
+                                  </>
+                                )}
+                              </Button>
+                              
+                              <Button
+                                onClick={() => {
+                                  setShowDeleteConfirmation(false)
+                                  setDeleteConfirmText('')
+                                  setDeletionError('')
+                                }}
+                                variant="outline"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Error Display */}
+              {deletionError && (
+                <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 mt-4">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <AlertDescription className="text-red-700 dark:text-red-400">
+                    {deletionError}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Support Contact */}
+              <div className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
+                <p>
+                  Need help? Contact us at{' '}
+                  <a 
+                    href="mailto:support@youtubeintel.com"
+                    className="text-blue-600 hover:underline"
+                  >
+                    support@youtubeintel.com
+                  </a>
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
