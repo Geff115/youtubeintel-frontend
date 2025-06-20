@@ -75,12 +75,70 @@ export function useUpdateProfile() {
   })
 }
 
+export function useUploadProfilePicture() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: userAPI.uploadProfilePicture,
+    onSuccess: (data) => {
+      // Update the user profile cache
+      queryClient.setQueryData(['user-profile'], data)
+      queryClient.setQueryData(['current-user'], data)
+      
+      // Refresh all user-related queries
+      queryClient.invalidateQueries({ queryKey: ['current-user'] })
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
+  })
+}
+
+export function useDeleteProfilePicture() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: userAPI.deleteProfilePicture,
+    onSuccess: (data) => {
+      // Update the user profile cache
+      queryClient.setQueryData(['user-profile'], data)
+      queryClient.setQueryData(['current-user'], data)
+      
+      // Refresh all user-related queries
+      queryClient.invalidateQueries({ queryKey: ['current-user'] })
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
+  })
+}
+
 export function useChangePassword() {
   return useMutation({
     mutationFn: ({ currentPassword, newPassword }: { 
       currentPassword: string; 
       newPassword: string 
     }) => authAPI.changePassword(currentPassword, newPassword),
+  })
+}
+
+// ==========================================
+// Account Deletion Hooks
+// ==========================================
+
+export function useCheckDeletionEligibility() {
+  return useMutation({
+    mutationFn: userAPI.checkDeletionEligibility,
+  })
+}
+
+export function useRequestDataExport() {
+  return useMutation({
+    mutationFn: userAPI.requestDataExport,
+  })
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: userAPI.deleteAccount,
   })
 }
 

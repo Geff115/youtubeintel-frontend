@@ -275,6 +275,22 @@ export const userAPI = {
     return response.data
   },
 
+  // Upload profile picture
+  uploadProfilePicture: async (formData: FormData) => {
+    const response = await api.post('/api/user/profile-picture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
+
+  // Delete profile picture
+  deleteProfilePicture: async () => {
+    const response = await api.delete('/api/user/profile-picture')
+    return response.data
+  },
+
   // Get user stats
   getStats: async () => {
     const response = await api.get('/api/stats')

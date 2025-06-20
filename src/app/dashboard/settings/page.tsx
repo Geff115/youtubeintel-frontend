@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, 
@@ -13,7 +13,9 @@ import {
   EyeOff,
   Download,
   AlertCircle,
-  X
+  X,
+  Upload,
+  Camera
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,6 +45,17 @@ export default function SettingsPage() {
     display_name: user?.display_name || ''
   })
 
+  // Initialize form when user data loads
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        display_name: user.display_name || ''
+      })
+    }
+  }, [user])
+
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -54,6 +67,11 @@ export default function SettingsPage() {
     new: false,
     confirm: false
   })
+
+  // Profile picture state
+  const [profilePicture, setProfilePicture] = useState<File | null>(null)
+  const [profilePicturePreview, setProfilePicturePreview] = useState('')
+  const [profilePictureLoading, setProfilePictureLoading] = useState(false)
 
   // Form states
   const [profileSuccess, setProfileSuccess] = useState(false)
@@ -79,6 +97,61 @@ export default function SettingsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
   const [deletionError, setDeletionError] = useState('')
+
+  // Handle profile picture upload
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setProfileError('Please select a valid image file')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setProfileError('Image must be less than 5MB')
+        return
+      }
+      
+      setProfilePicture(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setProfilePicturePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  // Handle profile picture upload
+  const handleProfilePictureUpload = async () => {
+    if (!profilePicture) return
+
+    try {
+      setProfilePictureLoading(true)
+      setProfileError('')
+
+      const formData = new FormData()
+      formData.append('profile_picture', profilePicture)
+
+      const response = await userAPI.uploadProfilePicture(formData)
+      
+      setProfileSuccess(true)
+      setProfilePicture(null)
+      setProfilePicturePreview('')
+      setTimeout(() => setProfileSuccess(false), 3000)
+      
+      // Refresh user data to get new profile picture URL
+      window.location.reload()
+      
+    } catch (error: any) {
+      setProfileError(error.response?.data?.error || 'Failed to upload profile picture')
+    } finally {
+      setProfilePictureLoading(false)
+    }
+  }
 
   // Handle profile update
   const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -261,7 +334,74 @@ export default function SettingsPage() {
                 </Alert>
               )}
 
-              <form onSubmit={handleProfileUpdate} className="space-y-4">
+              {/* Profile Picture Section */}
+              <div className="mb-6">
+                <Label className="text-base font-medium">Profile Picture</Label>
+                <div className="flex items-center space-x-4 mt-2">
+                  <div className="relative">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold overflow-hidden">
+                      {profilePicturePreview ? (
+                        <img 
+                          src={profilePicturePreview} 
+                          alt="Preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : user?.profile_picture ? (
+                        <img 
+                          src={user.profile_picture} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePictureChange}
+                      className="hidden"
+                      id="profile-picture-upload"
+                    />
+                    <Label htmlFor="profile-picture-upload" className="cursor-pointer">
+                      <Button type="button" variant="outline" className="w-full" asChild>
+                        <span>
+                          <Camera className="w-4 h-4 mr-2" />
+                          Choose Image
+                        </span>
+                      </Button>
+                    </Label>
+                    
+                    {profilePicture && (
+                      <Button
+                        onClick={handleProfilePictureUpload}
+                        disabled={profilePictureLoading}
+                        className="w-full"
+                      >
+                        {profilePictureLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Recommended: Square image, at least 200x200px, max 5MB
+                </p>
+              </div>
+
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="first_name">First Name</Label>
@@ -300,14 +440,14 @@ export default function SettingsPage() {
                   <p className="text-xs text-slate-500 mt-1">Email cannot be changed</p>
                 </div>
 
-                <Button type="submit" disabled={updateProfile.isPending}>
+                <Button onClick={handleProfileUpdate} disabled={updateProfile.isPending}>
                   {updateProfile.isPending ? 'Updating...' : 'Update Profile'}
                 </Button>
-              </form>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Password Change */}
+          {/* Password Change - Only show for email auth users */}
           {user?.auth_method === 'email' && (
             <Card>
               <CardHeader>
@@ -338,7 +478,7 @@ export default function SettingsPage() {
                   </Alert>
                 )}
 
-                <form onSubmit={handlePasswordChange} className="space-y-4">
+                <div className="space-y-4">
                   <div>
                     <Label htmlFor="current_password">Current Password</Label>
                     <div className="relative">
@@ -399,10 +539,10 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <Button type="submit" disabled={changePassword.isPending}>
+                  <Button onClick={handlePasswordChange} disabled={changePassword.isPending}>
                     {changePassword.isPending ? 'Changing...' : 'Change Password'}
                   </Button>
-                </form>
+                </div>
               </CardContent>
             </Card>
           )}
