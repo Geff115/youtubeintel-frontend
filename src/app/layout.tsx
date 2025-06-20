@@ -8,8 +8,11 @@ import { AuthProvider } from '@/hooks/use-auth-provider'
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
+  preload: true,
   fallback: ['system-ui', 'arial'],
   variable: '--font-inter',
+  weight: ['100', '900'],
+  style: 'normal',
 })
 
 export const metadata: Metadata = {
@@ -70,13 +73,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
         {/* Preload critical fonts */}
-        <link
-          rel="preload"
-          href="/fonts/inter-var.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} font-sans antialiased`}>
         <Providers>
