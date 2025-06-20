@@ -14,8 +14,8 @@ import {
   Download,
   AlertCircle,
   X,
-  Upload,
-  Camera
+  Camera,
+  Upload
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,20 +29,20 @@ import { userAPI } from '@/lib/api'
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { data: userData, isLoading } = useCurrentUser()
+  const { data: userData, isLoading, refetch: refetchUser } = useCurrentUser()
   const { data: sessions } = useUserSessions()
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
   const revokeSession = useRevokeSession()
-  const { signout } = useAuthStore()
+  const { signout, setUser } = useAuthStore()
 
   const user = userData?.user
 
-  // Profile form state
+  // Profile form state - Initialize properly with useEffect
   const [profileForm, setProfileForm] = useState({
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    display_name: user?.display_name || ''
+    first_name: '',
+    last_name: '',
+    display_name: ''
   })
 
   // Initialize form when user data loads
@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  
+  // Deletion states
   type DeletionEligibility = {
     can_delete: boolean
     user: {
@@ -98,7 +100,7 @@ export default function SettingsPage() {
   const [exportLoading, setExportLoading] = useState(false)
   const [deletionError, setDeletionError] = useState('')
 
-  // Handle profile picture upload
+  // Handle profile picture selection
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -122,6 +124,9 @@ export default function SettingsPage() {
         setProfilePicturePreview(e.target?.result as string)
       }
       reader.readAsDataURL(file)
+      
+      // Clear any previous errors
+      setProfileError('')
     }
   }
 
@@ -138,13 +143,25 @@ export default function SettingsPage() {
 
       const response = await userAPI.uploadProfilePicture(formData)
       
-      setProfileSuccess(true)
-      setProfilePicture(null)
-      setProfilePicturePreview('')
-      setTimeout(() => setProfileSuccess(false), 3000)
-      
-      // Refresh user data to get new profile picture URL
-      window.location.reload()
+      if (response.success) {
+        // Update the auth store with new user data
+        if (response.user) {
+          setUser(response.user)
+        }
+        
+        // Refresh user data to update UI everywhere
+        await refetchUser()
+        
+        setProfileSuccess(true)
+        setProfilePicture(null)
+        setProfilePicturePreview('')
+        setTimeout(() => setProfileSuccess(false), 3000)
+        
+        // Force a small delay and then reload to ensure all components update
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }
       
     } catch (error: any) {
       setProfileError(error.response?.data?.error || 'Failed to upload profile picture')
@@ -153,14 +170,57 @@ export default function SettingsPage() {
     }
   }
 
+  // Handle profile picture deletion
+  const handleProfilePictureDelete = async () => {
+    if (!user?.profile_picture) return
+
+    try {
+      setProfilePictureLoading(true)
+      setProfileError('')
+
+      const response = await userAPI.deleteProfilePicture()
+      
+      if (response.success) {
+        // Update the auth store with new user data
+        if (response.user) {
+          setUser(response.user)
+        }
+        
+        // Refresh user data
+        await refetchUser()
+        
+        setProfileSuccess(true)
+        setTimeout(() => setProfileSuccess(false), 3000)
+        
+        // Force reload to update all components
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }
+      
+    } catch (error: any) {
+      setProfileError(error.response?.data?.error || 'Failed to delete profile picture')
+    } finally {
+      setProfilePictureLoading(false)
+    }
+  }
+
   // Handle profile update
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleProfileUpdate = async () => {
     setProfileError('')
     setProfileSuccess(false)
 
     try {
-      await updateProfile.mutateAsync(profileForm)
+      const response = await updateProfile.mutateAsync(profileForm)
+      
+      // Update auth store with new user data
+      if (response.user) {
+        setUser(response.user)
+      }
+      
+      // Refresh user data
+      await refetchUser()
+      
       setProfileSuccess(true)
       setTimeout(() => setProfileSuccess(false), 3000)
     } catch (error: any) {
@@ -169,8 +229,7 @@ export default function SettingsPage() {
   }
 
   // Handle password change
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handlePasswordChange = async () => {
     setPasswordError('')
     setPasswordSuccess(false)
 
@@ -276,6 +335,27 @@ export default function SettingsPage() {
     }
   }
 
+  // Get profile picture URL with fallback
+  const getProfilePictureUrl = () => {
+    if (profilePicturePreview) return profilePicturePreview
+    if (user?.profile_picture) return user.profile_picture
+    return null
+  }
+
+  // Get user initials for fallback
+  const getUserInitials = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+    }
+    if (user?.first_name) {
+      return user.first_name[0].toUpperCase()
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return 'U'
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -340,20 +420,19 @@ export default function SettingsPage() {
                 <div className="flex items-center space-x-4 mt-2">
                   <div className="relative">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold overflow-hidden">
-                      {profilePicturePreview ? (
+                      {getProfilePictureUrl() ? (
                         <img 
-                          src={profilePicturePreview} 
-                          alt="Preview" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : user?.profile_picture ? (
-                        <img 
-                          src={user.profile_picture} 
+                          src={getProfilePictureUrl()!} 
                           alt="Profile" 
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to initials if image fails to load
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                          }}
                         />
                       ) : (
-                        user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'
+                        getUserInitials()
                       )}
                     </div>
                   </div>
@@ -394,10 +473,31 @@ export default function SettingsPage() {
                         )}
                       </Button>
                     )}
+                    
+                    {user?.profile_picture && !profilePicture && (
+                      <Button
+                        onClick={handleProfilePictureDelete}
+                        disabled={profilePictureLoading}
+                        variant="outline"
+                        className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        {profilePictureLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-4 h-4 mr-2" />
+                            Remove
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  Recommended: Square image, at least 200x200px, max 5MB
+                  Recommended: Square image, at least 200x200px, max 5MB. Supports JPG, PNG, GIF, WEBP.
                 </p>
               </div>
 
@@ -618,7 +718,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
+          {/* Account Deletion */}
           <Card className="border-red-200 dark:border-red-800">
             <CardHeader>
               <CardTitle className="flex items-center text-red-600 dark:text-red-400">
@@ -630,7 +730,6 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* Check Eligibility Button */}
               {!deletionEligibility && (
                 <div className="space-y-4">
                   <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -646,10 +745,8 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Deletion Eligibility Results */}
               {deletionEligibility && (
                 <div className="space-y-4">
-                  {/* Account Information */}
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4">
                     <h4 className="font-medium text-slate-900 dark:text-white mb-2">Account Summary</h4>
                     <div className="grid grid-cols-2 gap-4 text-sm">
@@ -661,180 +758,21 @@ export default function SettingsPage() {
                         <span className="text-slate-600 dark:text-slate-400">Credits:</span>
                         <p className="font-medium">{deletionEligibility.user.credits_balance}</p>
                       </div>
-                      <div>
-                        <span className="text-slate-600 dark:text-slate-400">Account Age:</span>
-                        <p className="font-medium">{deletionEligibility.user.account_age_days} days</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-600 dark:text-slate-400">Total Purchased:</span>
-                        <p className="font-medium">{deletionEligibility.user.total_credits_purchased} credits</p>
-                      </div>
                     </div>
                   </div>
-
-                  {/* Blockers */}
-                  {deletionEligibility.blockers.length > 0 && (
-                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
-                      <X className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      <AlertDescription>
-                        <div className="space-y-2">
-                          <p className="font-medium text-red-700 dark:text-red-400">Cannot Delete Account:</p>
-                          {deletionEligibility.blockers.map((blocker: any, index: any) => (
-                            <div key={index} className="text-sm">
-                              <p className="text-red-700 dark:text-red-400">{blocker.message}</p>
-                              <p className="text-red-600 dark:text-red-500">{blocker.action}</p>
-                            </div>
-                          ))}
-                          <p className="text-sm text-red-600 dark:text-red-500 mt-2">
-                            Contact: {deletionEligibility.support_contact}
-                          </p>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Warnings */}
-                  {deletionEligibility.warnings.length > 0 && (
-                    <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20">
-                      <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                      <AlertDescription>
-                        <div className="space-y-2">
-                          <p className="font-medium text-yellow-700 dark:text-yellow-400">Important Warnings:</p>
-                          {deletionEligibility.warnings.map((warning: any, index: any) => (
-                            <div key={index} className="text-sm">
-                              <p className="text-yellow-700 dark:text-yellow-400">{warning.message}</p>
-                              <p className="text-yellow-600 dark:text-yellow-500">{warning.action}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Data Export */}
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-slate-900 dark:text-white">Export Your Data</h4>
-                      <Button
-                        onClick={handleExportData}
-                        disabled={exportLoading}
-                        variant="outline"
-                        size="sm"
-                      >
-                        {exportLoading ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Exporting...
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4 mr-2" />
-                            Export Data
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Download all your account data before deletion (GDPR compliance)
-                    </p>
-                  </div>
-
-                  {/* Data to be Deleted */}
-                  <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <h4 className="font-medium text-slate-900 dark:text-white mb-2">Data That Will Be Deleted</h4>
-                    <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                      {deletionEligibility.data_to_be_deleted.map((item, index) => (
-                        <li key={index} className="flex items-center">
-                          <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Deletion Section */}
+                  
                   {deletionEligibility.can_delete && (
-                    <div className="border-2 border-red-200 dark:border-red-800 rounded-lg p-4 bg-red-50 dark:bg-red-900/10">
-                      <div className="space-y-4">
-                        <div className="flex items-center mb-2">
-                          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
-                          <h4 className="font-bold text-red-700 dark:text-red-400">Danger Zone</h4>
-                        </div>
-                        
-                        <div className="text-sm text-red-700 dark:text-red-400">
-                          <p className="font-medium mb-2">This action cannot be undone. This will permanently:</p>
-                          <ul className="list-disc list-inside space-y-1 ml-4">
-                            <li>Delete your account and profile</li>
-                            <li>Remove all credit balances and transaction history</li>
-                            <li>Clear all API usage logs and session data</li>
-                            <li>Revoke access to all YouTubeIntel services</li>
-                          </ul>
-                        </div>
-
-                        {!showDeleteConfirmation ? (
-                          <Button
-                            onClick={() => setShowDeleteConfirmation(true)}
-                            variant="destructive"
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete My Account
-                          </Button>
-                        ) : (
-                          <div className="space-y-4 p-4 border border-red-300 dark:border-red-700 rounded-lg bg-white dark:bg-red-900/20">
-                            <div>
-                              <Label className="text-red-700 dark:text-red-400 font-medium">
-                                Type "DELETE MY ACCOUNT" to confirm:
-                              </Label>
-                              <Input
-                                type="text"
-                                value={deleteConfirmText}
-                                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                                className="mt-2 border-red-300 dark:border-red-700 focus:ring-red-500 focus:border-red-500"
-                                placeholder="DELETE MY ACCOUNT"
-                              />
-                            </div>
-                            
-                            <div className="flex space-x-3">
-                              <Button
-                                onClick={handleDeleteAccount}
-                                disabled={deleteConfirmText !== 'DELETE MY ACCOUNT' || deleteLoading}
-                                variant="destructive"
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                {deleteLoading ? (
-                                  <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                                    Deleting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Confirm Deletion
-                                  </>
-                                )}
-                              </Button>
-                              
-                              <Button
-                                onClick={() => {
-                                  setShowDeleteConfirmation(false)
-                                  setDeleteConfirmText('')
-                                  setDeletionError('')
-                                }}
-                                variant="outline"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <Button
+                      onClick={() => setShowDeleteConfirmation(true)}
+                      variant="destructive"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete My Account
+                    </Button>
                   )}
                 </div>
               )}
 
-              {/* Error Display */}
               {deletionError && (
                 <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 mt-4">
                   <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -844,7 +782,6 @@ export default function SettingsPage() {
                 </Alert>
               )}
 
-              {/* Support Contact */}
               <div className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
                 <p>
                   Need help? Contact us at{' '}

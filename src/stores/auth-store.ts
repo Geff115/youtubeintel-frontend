@@ -1,8 +1,26 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authAPI, handleAPIError } from '@/lib/api'
-import { GoogleAuthHelper, GoogleUser } from '@/lib/google-auth'
-import type { User } from '@/types/auth'
+import { GoogleAuthHelper } from '@/lib/google-auth'
+
+interface User {
+  id: string
+  email: string
+  first_name?: string
+  last_name?: string
+  display_name?: string
+  profile_picture?: string | null
+  auth_method: 'email' | 'google'
+  email_verified: boolean
+  is_active: boolean
+  credits_balance: number
+  total_credits_purchased: number
+  current_plan: string
+  last_login?: string
+  created_at: string
+  updated_at: string
+  full_name?: string
+}
 
 interface AuthState {
   user: User | null
@@ -176,6 +194,22 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null
           })
+        }
+      },
+
+      setUser: (user: User | null) => {
+        set({ 
+          user,
+          isAuthenticated: !!user,
+          isLoading: false
+        })
+      },
+
+      updateUser: (updates: Partial<User>) => {
+        const currentUser = get().user
+        if (currentUser) {
+          const updatedUser = { ...currentUser, ...updates }
+          set({ user: updatedUser })
         }
       },
 
