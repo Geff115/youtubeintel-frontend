@@ -506,24 +506,11 @@ export default function SettingsPage() {
                       </Button>
                     )}
                     
-                    {/* Debug button to test file input */}
-                    <Button 
-                      type="button"
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => {
-                        const fileInput = document.getElementById('profile-picture-upload') as HTMLInputElement
-                        console.log('File input element:', fileInput)
-                        console.log('File input exists:', !!fileInput)
-                        if (fileInput) {
-                          console.log('Triggering file input click...')
-                          fileInput.click()
-                        }
-                      }}
-                      className="text-xs"
-                    >
-                      Debug: Test File Input
-                    </Button>
+                    {profilePicture && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Preview: {profilePicture.name} ({(profilePicture.size / 1024).toFixed(2)} KB)
+                      </p>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">

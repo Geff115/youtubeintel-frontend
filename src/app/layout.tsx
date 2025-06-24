@@ -5,15 +5,8 @@ import { Providers } from '@/components/providers'
 import { AuthProvider } from '@/hooks/use-auth-provider'
 
 // Configure Inter font with fallbacks
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  preload: true,
-  fallback: ['system-ui', 'arial'],
-  variable: '--font-inter',
-  weight: ['100', '900'],
-  style: 'normal',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
