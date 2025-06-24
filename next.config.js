@@ -7,11 +7,27 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    domains: [
-      'i.ytimg.com',
-      'yt3.ggpht.com',
-      'yt3.googleusercontent.com',
-      'lh3.googleusercontent.com',
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.ggpht.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
     ],
     formats: ['image/webp', 'image/avif'],
   },

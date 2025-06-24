@@ -1,9 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
+import { useCurrentUser } from '@/hooks/use-dashboard-data'
+import { useState, useEffect } from 'react'
 import { 
   BarChart3, 
   Search, 
@@ -42,8 +45,30 @@ const secondaryNavigation = [
 
 export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   const pathname = usePathname()
-  const { user, signout } = useAuthStore()
+  const { user: authUser, signout, setUser } = useAuthStore()
+  const { data: userData, refetch } = useCurrentUser()
   const router = useRouter()
+  const [userKey, setUserKey] = useState(0) // Force re-render key
+
+  // Use the most up-to-date user data
+  const user = userData?.user || authUser
+
+  // Listen for profile picture updates
+  useEffect(() => {
+    const handleProfileUpdate = (event: CustomEvent) => {
+      console.log('Sidebar received profile update event:', event.detail)
+      if (event.detail?.user) {
+        setUser(event.detail.user)
+        setUserKey(prev => prev + 1) // Force re-render
+      }
+    }
+
+    window.addEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
+    
+    return () => {
+      window.removeEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
+    }
+  }, [setUser])
 
   const handleSignOut = async () => {
     try {
@@ -67,6 +92,46 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
     }
   }
 
+  // Get profile picture URL with fallback
+  const getProfilePictureUrl = () => {
+    let url = user?.profile_picture
+    
+    // Fix Google profile picture URLs by removing size restrictions
+    if (url && url.includes('googleusercontent.com')) {
+      url = url.replace(/=s\d+-c$/, '=s400-c')
+    }
+    
+    console.log('Sidebar getting profile picture URL:', url, 'for user:', user?.email)
+    return url || null
+  }
+
+  // Get user initials for fallback
+  const getUserInitials = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+    }
+    if (user?.first_name) {
+      return user.first_name[0].toUpperCase()
+    }
+    if (user?.display_name) {
+      return user.display_name[0].toUpperCase()
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return 'U'
+  }
+
+  // Get user display name
+  const getUserDisplayName = () => {
+    if (user?.display_name) return user.display_name
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name} ${user.last_name}`
+    }
+    if (user?.first_name) return user.first_name
+    return user?.email || 'User'
+  }
+
   return (
     <>
       {/* Mobile sidebar */}
@@ -79,6 +144,10 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
           secondaryNavigation={secondaryNavigation}
           pathname={pathname}
           user={user}
+          userKey={userKey}
+          getProfilePictureUrl={getProfilePictureUrl}
+          getUserInitials={getUserInitials}
+          getUserDisplayName={getUserDisplayName}
           onSignOut={handleSignOut}
           onClose={onClose}
           showCloseButton
@@ -93,6 +162,10 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
             secondaryNavigation={secondaryNavigation}
             pathname={pathname}
             user={user}
+            userKey={userKey}
+            getProfilePictureUrl={getProfilePictureUrl}
+            getUserInitials={getUserInitials}
+            getUserDisplayName={getUserDisplayName}
             onSignOut={handleSignOut}
           />
         </div>
@@ -106,6 +179,10 @@ interface SidebarContentProps {
   secondaryNavigation: Array<{ name: string; href: string; icon: any }>
   pathname: string
   user: any
+  userKey: number
+  getProfilePictureUrl: () => string | null
+  getUserInitials: () => string
+  getUserDisplayName: () => string
   onSignOut: () => void
   onClose?: () => void
   showCloseButton?: boolean
@@ -116,6 +193,10 @@ function SidebarContent({
   secondaryNavigation, 
   pathname, 
   user, 
+  userKey,
+  getProfilePictureUrl,
+  getUserInitials,
+  getUserDisplayName,
   onSignOut, 
   onClose,
   showCloseButton 
@@ -143,12 +224,38 @@ function SidebarContent({
       {/* User Info */}
       <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
-            {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+          <div 
+            className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium overflow-hidden"
+            key={`sidebar-avatar-${userKey}-${user?.profile_picture}`} // Force re-render when profile changes
+          >
+            {getProfilePictureUrl() ? (
+              <Image
+                width={32}
+                height={32}
+                key={`sidebar-profile-pic-${userKey}-${user?.profile_picture}`} 
+                src={getProfilePictureUrl()!} 
+                alt="Profile" 
+                className="w-full h-full object-cover"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                onLoad={() => console.log('Sidebar profile image loaded:', getProfilePictureUrl())}
+                onError={(e) => {
+                  console.log('Sidebar profile image failed to load, falling back to initials')
+                  const target = e.target as HTMLImageElement
+                  const parent = target.parentElement
+                  if (parent) {
+                    target.style.display = 'none'
+                    parent.innerHTML = getUserInitials()
+                  }
+                }}
+              />
+            ) : (
+              getUserInitials()
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-              {user?.full_name || user?.email}
+              {getUserDisplayName()}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {user?.credits_balance || 0} credits

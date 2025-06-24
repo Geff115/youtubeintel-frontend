@@ -1,39 +1,54 @@
 'use client'
 
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { 
   User, 
   Camera, 
   Mail, 
-  Calendar,
   Link as LinkIcon,
   Edit3,
   Save,
   X,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Upload,
+  CreditCard
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { useCurrentUser, useUpdateProfile } from '@/hooks/use-dashboard-data'
+import { 
+  useCurrentUser, 
+  useUpdateProfile,
+  useUploadProfilePicture,
+  useDeleteProfilePicture
+} from '@/hooks/use-dashboard-data'
+import { useAuthStore } from '@/stores/auth-store'
 
 export default function ProfilePage() {
-  const { data: userData, isLoading } = useCurrentUser()
+  const { data: userData, isLoading, refetch } = useCurrentUser()
   const updateProfile = useUpdateProfile()
+  const uploadProfilePicture = useUploadProfilePicture()
+  const deleteProfilePicture = useDeleteProfilePicture()
+  const { user: authUser, setUser } = useAuthStore()
   
-  const user = userData?.user
+  const user = userData?.user || authUser
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || '',
-    display_name: user?.display_name || ''
+    first_name: '',
+    last_name: '',
+    display_name: ''
   })
+
+  // Profile picture state
+  const [profilePicture, setProfilePicture] = useState<File | null>(null)
+  const [profilePicturePreview, setProfilePicturePreview] = useState('')
 
   // Form states
   const [success, setSuccess] = useState(false)
@@ -41,26 +56,130 @@ export default function ProfilePage() {
 
   // Update form data when user data loads
   useEffect(() => {
-    let isMounted = true;
-    if (user && isMounted) {
+    if (user) {
       setFormData({
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         display_name: user.display_name || ''
       })
     }
+  }, [user])
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
+  // Handle profile picture selection
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file')
+        return
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be less than 5MB')
+        return
+      }
+      
+      setProfilePicture(file)
+      
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setProfilePicturePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+      
+      // Clear any previous errors
+      setError('')
+    }
+  }
+
+  // Handle profile picture upload
+  const handleProfilePictureUpload = async () => {
+    if (!profilePicture) return
+
+    try {
+      setError('')
+
+      const formData = new FormData()
+      formData.append('profile_picture', profilePicture)
+
+      console.log('Profile page: Uploading profile picture...')
+      const result = await uploadProfilePicture.mutateAsync(formData)
+      
+      console.log('Profile page: Upload successful:', result)
+      setSuccess(true)
+      setProfilePicture(null)
+      setProfilePicturePreview('')
+      
+      // Update auth store immediately
+      if (result.user) {
+        setUser(result.user)
+        
+        // Dispatch custom event to notify header and sidebar
+        window.dispatchEvent(new CustomEvent('profilePictureUpdated', { 
+          detail: { user: result.user } 
+        }))
+        
+        console.log('Profile page: Dispatched profilePictureUpdated event')
+      }
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(false), 3000)
+      
+    } catch (error: any) {
+      console.error('Profile page: Profile picture upload error:', error)
+      setError(error.response?.data?.error || 'Failed to upload profile picture')
+    }
+  }
+
+  // Handle profile picture deletion
+  const handleProfilePictureDelete = async () => {
+    if (!user?.profile_picture) return
+
+    try {
+      setError('')
+
+      console.log('Profile page: Deleting profile picture...')
+      const result = await deleteProfilePicture.mutateAsync()
+      
+      console.log('Profile page: Delete successful:', result)
+      setSuccess(true)
+      
+      // Update auth store immediately
+      if (result.user) {
+        setUser(result.user)
+        
+        // Dispatch custom event to notify header and sidebar
+        window.dispatchEvent(new CustomEvent('profilePictureUpdated', { 
+          detail: { user: result.user } 
+        }))
+        
+        console.log('Profile page: Dispatched profilePictureUpdated event after deletion')
+      }
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(false), 3000)
+      
+    } catch (error: any) {
+      console.error('Profile page: Profile picture delete error:', error)
+      setError(error.response?.data?.error || 'Failed to delete profile picture')
+    }
+  }
 
   const handleSave = async () => {
     setError('')
     setSuccess(false)
 
     try {
-      await updateProfile.mutateAsync(formData)
+      const result = await updateProfile.mutateAsync(formData)
+      
+      // Update auth store
+      if (result.user) {
+        setUser(result.user)
+      }
+      
       setSuccess(true)
       setIsEditing(false)
       setTimeout(() => setSuccess(false), 3000)
@@ -79,6 +198,29 @@ export default function ProfilePage() {
     }
     setIsEditing(false)
     setError('')
+    setProfilePicture(null)
+    setProfilePicturePreview('')
+  }
+
+  // Get profile picture URL with fallback
+  const getProfilePictureUrl = () => {
+    if (profilePicturePreview) return profilePicturePreview
+    if (user?.profile_picture) return user.profile_picture
+    return null
+  }
+
+  // Get user initials for fallback
+  const getUserInitials = () => {
+    if (user?.first_name && user?.last_name) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase()
+    }
+    if (user?.first_name) {
+      return user.first_name[0].toUpperCase()
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return 'U'
   }
 
   if (isLoading) {
@@ -158,36 +300,110 @@ export default function ProfilePage() {
               {/* Profile Picture Section */}
               <div className="flex items-center space-x-6 mb-8">
                 <div className="relative">
-                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                    {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
+                    {getProfilePictureUrl() ? (
+                      <Image
+                        width={80}
+                        height={80}
+                        src={getProfilePictureUrl()!} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to initials if image fails to load
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      getUserInitials()
+                    )}
                   </div>
-                  {isEditing && (
-                    <button className="absolute bottom-0 right-0 w-8 h-8 bg-slate-600 hover:bg-slate-700 rounded-full flex items-center justify-center text-white transition-colors">
-                      <Camera className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                    {user?.full_name || user?.email}
+                
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                    Profile Picture
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-400">
-                    {user?.email}
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                    Upload a photo to personalize your profile
                   </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant={user?.email_verified ? "success" : "warning"}>
-                      {user?.email_verified ? 'Verified' : 'Unverified'}
-                    </Badge>
-                    <Badge variant="info" className="capitalize">
-                      {user?.current_plan || 'Free'}
-                    </Badge>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePictureChange}
+                      className="hidden"
+                      id="profile-picture-upload"
+                    />
+                    
+                    {/* Upload button */}
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const fileInput = document.getElementById('profile-picture-upload') as HTMLInputElement
+                        fileInput?.click()
+                      }}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Choose Photo
+                    </Button>
+                    
+                    {profilePicture && (
+                      <Button
+                        onClick={handleProfilePictureUpload}
+                        disabled={uploadProfilePicture.isPending}
+                        size="sm"
+                      >
+                        {uploadProfilePicture.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {user?.profile_picture && !profilePicture && (
+                      <Button
+                        onClick={handleProfilePictureDelete}
+                        disabled={deleteProfilePicture.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        {deleteProfilePicture.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Removing...
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-4 h-4 mr-2" />
+                            Remove
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
+                  
+                  <p className="text-xs text-slate-500 mt-2">
+                    JPG, PNG or GIF. Max size 5MB.
+                  </p>
                 </div>
               </div>
 
               {/* Profile Form */}
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="first_name">First Name</Label>
                     {isEditing ? (
@@ -195,15 +411,12 @@ export default function ProfilePage() {
                         id="first_name"
                         value={formData.first_name}
                         onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                        placeholder="Enter your first name"
+                        className="mt-1"
                       />
                     ) : (
-                      <div className="mt-2 text-slate-900 dark:text-white">
-                        {user?.first_name || 'Not set'}
-                      </div>
+                      <p className="mt-1 text-sm text-slate-900 dark:text-white">{user?.display_name || 'Not provided'}</p>
                     )}
                   </div>
-                  
                   <div>
                     <Label htmlFor="last_name">Last Name</Label>
                     {isEditing ? (
@@ -211,56 +424,23 @@ export default function ProfilePage() {
                         id="last_name"
                         value={formData.last_name}
                         onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                        placeholder="Enter your last name"
+                        className="mt-1"
                       />
                     ) : (
-                      <div className="mt-2 text-slate-900 dark:text-white">
-                        {user?.last_name || 'Not set'}
-                      </div>
+                      <p className="mt-1 text-sm text-slate-900 dark:text-white">{user?.last_name || 'Not provided'}</p>
                     )}
                   </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="display_name">Display Name</Label>
-                  {isEditing ? (
-                    <Input
-                      id="display_name"
-                      value={formData.display_name}
-                      onChange={(e) => setFormData({...formData, display_name: e.target.value})}
-                      placeholder="How would you like to be addressed?"
-                    />
-                  ) : (
-                    <div className="mt-2 text-slate-900 dark:text-white">
-                      {user?.display_name || 'Not set'}
+                  <div>
+                    <Label>Email Address</Label>
+                    <div className="mt-1 flex items-center space-x-2">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <p className="text-sm text-slate-900 dark:text-white">{user?.email}</p>
+                      {user?.email_verified && (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )}
                     </div>
-                  )}
-                  <p className="text-xs text-slate-500 mt-1">
-                    This is how your name will appear in the dashboard
-                  </p>
-                </div>
-
-                <div>
-                  <Label>Email Address</Label>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-900 dark:text-white">{user?.email}</span>
-                    {user?.email_verified && (
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Email address cannot be changed
-                  </p>
-                </div>
-
-                <div>
-                  <Label>Authentication Method</Label>
-                  <div className="mt-2 flex items-center gap-2">
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-900 dark:text-white capitalize">
-                      {user?.auth_method === 'google' ? 'Google OAuth' : 'Email & Password'}
-                    </span>
+                    <p className="text-xs text-slate-500 mt-1">Email cannot be changed</p>
                   </div>
                 </div>
               </div>
@@ -268,64 +448,39 @@ export default function ProfilePage() {
           </Card>
         </div>
 
-        {/* Sidebar - Account Stats */}
+        {/* Sidebar Information */}
         <div className="space-y-6">
-          {/* Account Statistics */}
+          {/* Account Stats */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Account Statistics</CardTitle>
+              <CardTitle>Account Overview</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Member since</span>
-                </div>
-                <span className="text-sm font-medium">
-                  {new Date(user?.created_at || '').toLocaleDateString()}
-                </span>
+                <span className="text-sm text-slate-600 dark:text-slate-400">Plan</span>
+                <Badge variant="info">{user?.current_plan || 'Free'}</Badge>
               </div>
-              
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Credits balance</span>
-                <span className="text-sm font-medium">{user?.credits_balance || 0}</span>
+                <span className="text-sm text-slate-600 dark:text-slate-400">Credits</span>
+                <span className="font-medium">{user?.credits_balance || 0}</span>
               </div>
-              
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Total purchased</span>
-                <span className="text-sm font-medium">{user?.total_credits_purchased || 0}</span>
+                <span className="text-sm text-slate-600 dark:text-slate-400">Member since</span>
+                <span className="text-sm">{new Date(user?.created_at || '').toLocaleDateString()}</span>
               </div>
-              
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Current plan</span>
-                <Badge variant="info" className="capitalize">
-                  {user?.current_plan || 'Free'}
+                <span className="text-sm text-slate-600 dark:text-slate-400">Authentication</span>
+                <Badge variant={user?.auth_method === 'google' ? 'info' : 'outline'}>
+                  {user?.auth_method === 'google' ? 'Google' : 'Email'}
                 </Badge>
               </div>
-              
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Last login</span>
-                <span className="text-sm font-medium">
-                  {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Activity Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Activity Summary</CardTitle>
-              <CardDescription>Your recent platform usage</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Activity tracking will be available with WebSocket integration
-                </p>
+                <span className="text-sm text-slate-600 dark:text-slate-400">Email verified</span>
+                {user?.email_verified ? (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -333,36 +488,27 @@ export default function ProfilePage() {
           {/* Quick Actions */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Quick Actions</CardTitle>
+              <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => window.location.href = '/dashboard/settings'}
-              >
-                <User className="w-4 h-4 mr-2" />
-                Account Settings
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <a href="/dashboard/settings">
+                  <User className="w-4 h-4 mr-2" />
+                  Account Settings
+                </a>
               </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => window.location.href = '/dashboard/credits'}
-              >
-                <LinkIcon className="w-4 h-4 mr-2" />
-                Manage Credits
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <a href="/dashboard/credits">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Manage Credits
+                </a>
               </Button>
-              
-              {!user?.email_verified && (
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start border-yellow-200 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-800 dark:text-yellow-400 dark:hover:bg-yellow-900/20"
-                >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Verify Email
-                </Button>
-              )}
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <a href="/docs">
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Documentation
+                </a>
+              </Button>
             </CardContent>
           </Card>
 
@@ -416,6 +562,42 @@ export default function ProfilePage() {
                         )}%` 
                       }}
                     />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Activity Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Profile updated</p>
+                    <p className="text-xs text-slate-500">Just now</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Last login</p>
+                    <p className="text-xs text-slate-500">
+                      {user?.last_login ? new Date(user.last_login).toLocaleDateString() : 'Unknown'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Account created</p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(user?.created_at || '').toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               </div>

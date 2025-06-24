@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, 
@@ -11,7 +12,6 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
-  Download,
   AlertCircle,
   X,
   Camera,
@@ -22,8 +22,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { useCurrentUser, useUpdateProfile, useChangePassword, useUserSessions, useRevokeSession } from '@/hooks/use-dashboard-data'
+import { 
+  useCurrentUser, 
+  useUpdateProfile, 
+  useChangePassword, 
+  useUserSessions, 
+  useRevokeSession,
+  useUploadProfilePicture,
+  useDeleteProfilePicture
+} from '@/hooks/use-dashboard-data'
 import { useAuthStore } from '@/stores/auth-store'
 import { userAPI } from '@/lib/api'
 
@@ -34,9 +41,12 @@ export default function SettingsPage() {
   const updateProfile = useUpdateProfile()
   const changePassword = useChangePassword()
   const revokeSession = useRevokeSession()
-  const { signout, setUser } = useAuthStore()
+  const uploadProfilePicture = useUploadProfilePicture()
+  const deleteProfilePicture = useDeleteProfilePicture()
+  const { signout, user: authUser, setUser } = useAuthStore()
 
-  const user = userData?.user
+  const user = userData?.user || authUser
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Profile form state - Initialize properly with useEffect
   const [profileForm, setProfileForm] = useState({
@@ -71,7 +81,6 @@ export default function SettingsPage() {
   // Profile picture state
   const [profilePicture, setProfilePicture] = useState<File | null>(null)
   const [profilePicturePreview, setProfilePicturePreview] = useState('')
-  const [profilePictureLoading, setProfilePictureLoading] = useState(false)
 
   // Form states
   const [profileSuccess, setProfileSuccess] = useState(false)
@@ -135,38 +144,39 @@ export default function SettingsPage() {
     if (!profilePicture) return
 
     try {
-      setProfilePictureLoading(true)
       setProfileError('')
 
       const formData = new FormData()
       formData.append('profile_picture', profilePicture)
 
-      const response = await userAPI.uploadProfilePicture(formData)
+      console.log('Uploading profile picture...')
+      const result = await uploadProfilePicture.mutateAsync(formData)
       
-      if (response.success) {
-        // Update the auth store with new user data
-        if (response.user) {
-          setUser(response.user)
-        }
+      console.log('Upload successful:', result)
+      setProfileSuccess(true)
+      setProfilePicture(null)
+      setProfilePicturePreview('')
+      
+      // Update auth store immediately
+      if (result.user) {
+        setUser(result.user)
         
-        // Refresh user data to update UI everywhere
-        await refetchUser()
+        // Dispatch custom event to notify header and other components
+        window.dispatchEvent(new CustomEvent('profilePictureUpdated', { 
+          detail: { user: result.user } 
+        }))
         
-        setProfileSuccess(true)
-        setProfilePicture(null)
-        setProfilePicturePreview('')
-        setTimeout(() => setProfileSuccess(false), 3000)
-        
-        // Force a small delay and then reload to ensure all components update
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        console.log('Dispatched profilePictureUpdated event with user:', result.user)
       }
       
+      // Clear success message after 3 seconds
+      setTimeout(() => setProfileSuccess(false), 3000)
+      
+      console.log('Profile picture upload completed successfully')
+      
     } catch (error: any) {
+      console.error('Profile picture upload error:', error)
       setProfileError(error.response?.data?.error || 'Failed to upload profile picture')
-    } finally {
-      setProfilePictureLoading(false)
     }
   }
 
@@ -175,33 +185,34 @@ export default function SettingsPage() {
     if (!user?.profile_picture) return
 
     try {
-      setProfilePictureLoading(true)
       setProfileError('')
 
-      const response = await userAPI.deleteProfilePicture()
+      console.log('Deleting profile picture...')
+      const result = await deleteProfilePicture.mutateAsync()
       
-      if (response.success) {
-        // Update the auth store with new user data
-        if (response.user) {
-          setUser(response.user)
-        }
+      console.log('Delete successful:', result)
+      setProfileSuccess(true)
+      
+      // Update auth store immediately
+      if (result.user) {
+        setUser(result.user)
         
-        // Refresh user data
-        await refetchUser()
+        // Dispatch custom event to notify header and other components
+        window.dispatchEvent(new CustomEvent('profilePictureUpdated', { 
+          detail: { user: result.user } 
+        }))
         
-        setProfileSuccess(true)
-        setTimeout(() => setProfileSuccess(false), 3000)
-        
-        // Force reload to update all components
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        console.log('Dispatched profilePictureUpdated event after deletion with user:', result.user)
       }
       
+      // Clear success message after 3 seconds
+      setTimeout(() => setProfileSuccess(false), 3000)
+      
+      console.log('Profile picture deletion completed successfully')
+      
     } catch (error: any) {
+      console.error('Profile picture delete error:', error)
       setProfileError(error.response?.data?.error || 'Failed to delete profile picture')
-    } finally {
-      setProfilePictureLoading(false)
     }
   }
 
@@ -211,16 +222,7 @@ export default function SettingsPage() {
     setProfileSuccess(false)
 
     try {
-      const response = await updateProfile.mutateAsync(profileForm)
-      
-      // Update auth store with new user data
-      if (response.user) {
-        setUser(response.user)
-      }
-      
-      // Refresh user data
-      await refetchUser()
-      
+      await updateProfile.mutateAsync(profileForm)
       setProfileSuccess(true)
       setTimeout(() => setProfileSuccess(false), 3000)
     } catch (error: any) {
@@ -421,7 +423,9 @@ export default function SettingsPage() {
                   <div className="relative">
                     <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold overflow-hidden">
                       {getProfilePictureUrl() ? (
-                        <img 
+                        <Image
+                          width={80}
+                          height={80}
                           src={getProfilePictureUrl()!} 
                           alt="Profile" 
                           className="w-full h-full object-cover"
@@ -438,29 +442,36 @@ export default function SettingsPage() {
                   </div>
                   
                   <div className="flex flex-col space-y-2">
+                    {/* Hidden file input */}
                     <input
+                      ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={handleProfilePictureChange}
                       className="hidden"
-                      id="profile-picture-upload"
                     />
-                    <Label htmlFor="profile-picture-upload" className="cursor-pointer">
-                      <Button type="button" variant="outline" className="w-full" asChild>
-                        <span>
-                          <Camera className="w-4 h-4 mr-2" />
-                          Choose Image
-                        </span>
-                      </Button>
-                    </Label>
+                    
+                    {/* Camera button that triggers file input */}
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        console.log('Camera button clicked clicked with ref')
+                        fileInputRef.current?.click()
+                      }}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Choose Image
+                    </Button>
                     
                     {profilePicture && (
                       <Button
                         onClick={handleProfilePictureUpload}
-                        disabled={profilePictureLoading}
+                        disabled={uploadProfilePicture.isPending}
                         className="w-full"
                       >
-                        {profilePictureLoading ? (
+                        {uploadProfilePicture.isPending ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                             Uploading...
@@ -477,11 +488,11 @@ export default function SettingsPage() {
                     {user?.profile_picture && !profilePicture && (
                       <Button
                         onClick={handleProfilePictureDelete}
-                        disabled={profilePictureLoading}
+                        disabled={deleteProfilePicture.isPending}
                         variant="outline"
                         className="w-full text-red-600 border-red-200 hover:bg-red-50"
                       >
-                        {profilePictureLoading ? (
+                        {deleteProfilePicture.isPending ? (
                           <>
                             <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin mr-2"></div>
                             Deleting...
@@ -494,6 +505,25 @@ export default function SettingsPage() {
                         )}
                       </Button>
                     )}
+                    
+                    {/* Debug button to test file input */}
+                    <Button 
+                      type="button"
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        const fileInput = document.getElementById('profile-picture-upload') as HTMLInputElement
+                        console.log('File input element:', fileInput)
+                        console.log('File input exists:', !!fileInput)
+                        if (fileInput) {
+                          console.log('Triggering file input click...')
+                          fileInput.click()
+                        }
+                      }}
+                      className="text-xs"
+                    >
+                      Debug: Test File Input
+                    </Button>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
@@ -648,7 +678,7 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - keeping the rest of your sidebar content */}
         <div className="space-y-6">
           {/* Account Overview */}
           <Card>
@@ -656,10 +686,6 @@ export default function SettingsPage() {
               <CardTitle className="text-lg">Account Overview</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Plan</span>
-                <Badge variant="info">{user?.current_plan || 'Free'}</Badge>
-              </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Credits</span>
                 <span className="font-medium">{user?.credits_balance || 0}</span>

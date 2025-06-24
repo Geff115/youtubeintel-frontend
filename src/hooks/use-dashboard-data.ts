@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { userAPI, channelAPI, authAPI, api } from '@/lib/api'
 import type { UserStats, ChannelsResponse, ProcessingJob, User } from '@/types/dashboard'
+import { useAuthStore } from '@/stores/auth-store'
+
 
 // ==========================================
 // Dashboard Stats Hooks
@@ -16,9 +18,18 @@ export function useDashboardStats() {
 }
 
 export function useUserProfile() {
+  const { setUser } = useAuthStore()
+  
   return useQuery({
     queryKey: ['user-profile'],
-    queryFn: userAPI.getProfile,
+    queryFn: async () => {
+      const response = await userAPI.getProfile()
+      // Update auth store with fresh user data
+      if (response.user) {
+        setUser(response.user)
+      }
+      return response
+    },
     staleTime: 60000, // Profile data doesn't change often
   })
 }
@@ -62,14 +73,23 @@ export function useJobStatus(jobId: string) {
 
 export function useUpdateProfile() {
   const queryClient = useQueryClient()
+  const { setUser } = useAuthStore()
   
   return useMutation({
     mutationFn: userAPI.updateProfile,
     onSuccess: (data) => {
-      // Update the user profile cache
+      // Update all relevant caches
+      queryClient.setQueryData(['current-user'], data)
       queryClient.setQueryData(['user-profile'], data)
       
-      // Also update the auth store user data
+      // Update auth store
+      if (data.user) {
+        setUser(data.user)
+      }
+      
+      // Invalidate and refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['current-user'] })
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     },
   })
@@ -77,36 +97,60 @@ export function useUpdateProfile() {
 
 export function useUploadProfilePicture() {
   const queryClient = useQueryClient()
+  const { setUser } = useAuthStore()
   
   return useMutation({
     mutationFn: userAPI.uploadProfilePicture,
     onSuccess: (data) => {
-      // Update the user profile cache
-      queryClient.setQueryData(['user-profile'], data)
-      queryClient.setQueryData(['current-user'], data)
+      console.log('Profile picture upload success:', data)
       
-      // Refresh all user-related queries
+      // Update all caches immediately
+      queryClient.setQueryData(['current-user'], data)
+      queryClient.setQueryData(['user-profile'], data)
+      
+      // Update auth store immediately
+      if (data.user) {
+        setUser(data.user)
+        console.log('Updated auth store with new user data:', data.user)
+      }
+      
+      // Force refetch to ensure all components get updated data
       queryClient.invalidateQueries({ queryKey: ['current-user'] })
       queryClient.invalidateQueries({ queryKey: ['user-profile'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      
+      // Force a cache refresh
+      queryClient.refetchQueries({ queryKey: ['current-user'] })
     },
   })
 }
 
 export function useDeleteProfilePicture() {
   const queryClient = useQueryClient()
+  const { setUser } = useAuthStore()
   
   return useMutation({
     mutationFn: userAPI.deleteProfilePicture,
     onSuccess: (data) => {
-      // Update the user profile cache
-      queryClient.setQueryData(['user-profile'], data)
-      queryClient.setQueryData(['current-user'], data)
+      console.log('Profile picture delete success:', data)
       
-      // Refresh all user-related queries
+      // Update all caches immediately
+      queryClient.setQueryData(['current-user'], data)
+      queryClient.setQueryData(['user-profile'], data)
+      
+      // Update auth store immediately
+      if (data.user) {
+        setUser(data.user)
+        console.log('Updated auth store after deletion:', data.user)
+      }
+      
+      // Force refetch to ensure all components get updated data
       queryClient.invalidateQueries({ queryKey: ['current-user'] })
       queryClient.invalidateQueries({ queryKey: ['user-profile'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      
+      // Force a cache refresh
+      queryClient.refetchQueries({ queryKey: ['current-user'] })
     },
   })
 }
@@ -147,10 +191,19 @@ export function useDeleteAccount() {
 // ==========================================
 
 export function useCurrentUser() {
+  const { setUser } = useAuthStore()
+  
   return useQuery({
     queryKey: ['current-user'],
-    queryFn: authAPI.getMe,
-    staleTime: 60000,
+    queryFn: async () => {
+      const response = await authAPI.getMe()
+      // Update auth store with fresh user data
+      if (response.user) {
+        setUser(response.user)
+      }
+      return response
+    },
+    staleTime: 30000, // Consider data stale after 30 seconds
     retry: false, // Don't retry if unauthorized
   })
 }
@@ -333,7 +386,11 @@ export function useDashboardOverview() {
 export function useUserSessions() {
   return useQuery({
     queryKey: ['user-sessions'],
-    queryFn: () => fetch('/api/auth/sessions').then(res => res.json()),
+    queryFn: async () => {
+      const response = await api.get('/api/auth/sessions')
+      return response.data
+    },
+    staleTime: 60000, // Sessions don't change often
   })
 }
 
@@ -341,8 +398,10 @@ export function useRevokeSession() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (sessionId: string) => 
-      fetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    mutationFn: async (sessionId: string) => {
+      const response = await api.delete(`/api/auth/sessions/${sessionId}`)
+      return response.data
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-sessions'] })
     },

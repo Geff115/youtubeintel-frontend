@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import Image from 'next/image'
+import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   Menu, 
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useAuthStore } from '@/stores/auth-store'
+import { useCurrentUser } from '@/hooks/use-dashboard-data'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,10 +47,53 @@ const pageTitles: Record<string, string> = {
 export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, signout } = useAuthStore()
+  const { user: authUser, signout, setUser } = useAuthStore()
+  const { data: userData, refetch } = useCurrentUser()
   const [searchQuery, setSearchQuery] = useState('')
+  const [userKey, setUserKey] = useState(0) // Force re-render key
 
   const pageTitle = pageTitles[pathname] || 'Dashboard'
+  
+  // Always use the freshest user data available
+  const currentUser = userData?.user || authUser
+
+  // Listen for profile picture updates
+  useEffect(() => {
+    const handleProfileUpdate = (event: CustomEvent) => {
+      console.log('Header received profile update event:', event.detail)
+      if (event.detail?.user) {
+        setUser(event.detail.user)
+        setUserKey(prev => prev + 1) // Force re-render
+        refetch() // Also refetch to be sure
+      }
+    }
+
+    // Listen for custom profile update events
+    window.addEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
+    
+    // Also listen for storage changes (in case other tabs update the user)
+    const handleStorageChange = () => {
+      console.log('Storage changed, refreshing user data')
+      refetch()
+      setUserKey(prev => prev + 1)
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [setUser, refetch])
+
+  // Auto-refresh user data every 10 seconds to catch updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch()
+    }, 10000)
+    
+    return () => clearInterval(interval)
+  }, [refetch])
 
   const handleSignOut = async () => {
     try {
@@ -58,30 +103,67 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
       localStorage.removeItem('refresh_token')
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
       document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      router.push('/')
+      router.push('/auth/signin')
     } catch (error) {
-      console.error('Signout error:', error)
-      // Force cleanup even if API fails
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      router.push('/')
+      console.error('Sign out error:', error)
+      router.push('/auth/signin')
     }
   }
 
+  // Get profile picture URL with fallback
+  const getProfilePictureUrl = () => {
+    let url = currentUser?.profile_picture
+    
+    // Fix Google profile picture URLs by removing size restrictions
+    if (url && url.includes('googleusercontent.com')) {
+      // Remove size parameter to get full resolution
+      url = url.replace(/=s\d+-c$/, '=s400-c')
+      console.log('Fixed Google profile picture URL:', url)
+    }
+    
+    console.log('Header getting profile picture URL:', url, 'for user:', currentUser?.email)
+    return url || null
+  }
+
+  // Get user initials for fallback
+  const getUserInitials = () => {
+    if (currentUser?.first_name && currentUser?.last_name) {
+      return `${currentUser.first_name[0]}${currentUser.last_name[0]}`.toUpperCase()
+    }
+    if (currentUser?.first_name) {
+      return currentUser.first_name[0].toUpperCase()
+    }
+    if (currentUser?.display_name) {
+      return currentUser.display_name[0].toUpperCase()
+    }
+    if (currentUser?.email) {
+      return currentUser.email[0].toUpperCase()
+    }
+    return 'U'
+  }
+
+  // Get user display name
+  const getUserDisplayName = () => {
+    if (currentUser?.display_name) return currentUser.display_name
+    if (currentUser?.first_name && currentUser?.last_name) {
+      return `${currentUser.first_name} ${currentUser.last_name}`
+    }
+    if (currentUser?.first_name) return currentUser.first_name
+    return currentUser?.email || 'User'
+  }
+
   return (
-    <header className="sticky top-0 z-20 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+    <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40">
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex items-center justify-between h-16">
           {/* Left side */}
           <div className="flex items-center space-x-4">
             {/* Mobile menu button */}
             <Button
               variant="ghost"
               size="sm"
-              className="lg:hidden"
               onClick={onMenuClick}
+              className="lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -94,9 +176,9 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
             </div>
           </div>
 
-          {/* Center - Search (hidden on mobile) */}
-          <div className="hidden md:flex flex-1 max-w-lg mx-8">
-            <div className="relative w-full">
+          {/* Center - Search (desktop only) */}
+          <div className="hidden md:block flex-1 max-w-md mx-8">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 type="text"
@@ -114,10 +196,10 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
             <Link href="/dashboard/credits">
               <Button variant="outline" size="sm" className="hidden sm:flex">
                 <CreditCard className="h-4 w-4 mr-2" />
-                {user?.credits_balance || 0} credits
+                {currentUser?.credits_balance || 0} credits
               </Button>
               <Button variant="outline" size="sm" className="sm:hidden">
-                {user?.credits_balance || 0}
+                {currentUser?.credits_balance || 0}
               </Button>
             </Link>
 
@@ -137,12 +219,37 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
               <ThemeToggle />
             </div>
 
-            {/* User menu */}
-            <DropdownMenu>
+            {/* User menu - key prop forces re-render when user changes */}
+            <DropdownMenu key={`user-menu-${userKey}-${currentUser?.profile_picture}`}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2 p-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                    {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm overflow-hidden">
+                    {getProfilePictureUrl() ? (
+                      <Image 
+                        width={32}
+                        height={32}
+                        src={getProfilePictureUrl()!} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover"
+                        key={`profile-img-${userKey}-${currentUser?.profile_picture}`} // Force image refresh
+                        crossOrigin="anonymous" // Add CORS support for external images
+                        referrerPolicy="no-referrer" // Help with external image loading
+                        onLoad={() => console.log('Profile image loaded successfully:', getProfilePictureUrl())}
+                        onError={(e) => {
+                          console.log('Profile image failed to load:', getProfilePictureUrl())
+                          console.log('Error details:', e)
+                          // Fallback to initials if image fails to load
+                          const target = e.target as HTMLImageElement
+                          const parent = target.parentElement
+                          if (parent) {
+                            target.style.display = 'none'
+                            parent.innerHTML = getUserInitials()
+                          }
+                        }}
+                      />
+                    ) : (
+                      getUserInitials()
+                    )}
                   </div>
                   <div className="hidden sm:block">
                     <ChevronDown className="h-4 w-4 text-slate-500" />
@@ -154,10 +261,14 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium">
-                      {user?.full_name || user?.email}
+                      {getUserDisplayName()}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {user?.email}
+                      {currentUser?.email}
+                    </p>
+                    {/* Debug info - remove in production */}
+                    <p className="text-xs text-blue-500">
+                      {currentUser?.profile_picture ? 'Has Profile Pic' : 'No Profile Pic'}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -165,7 +276,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                 <DropdownMenuSeparator />
                 
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings" className="flex items-center">
+                  <Link href="/dashboard/profile" className="flex items-center">
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </Link>

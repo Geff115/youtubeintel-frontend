@@ -27,6 +27,8 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   error: string | null
+  setUser: (user: User | null) => void
+  updateUser: (updates: Partial<User>) => void
   
   // Actions
   signin: (email: string, password: string) => Promise<void>
@@ -61,6 +63,22 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
 
+      setUser: (user: User | null) => {
+        set({ 
+          user,
+          isAuthenticated: !!user,
+          isLoading: false
+        })
+      },
+
+      updateUser: (updates: Partial<User>) => {
+        const currentUser = get().user
+        if (currentUser) {
+          const updatedUser = { ...currentUser, ...updates }
+          set({ user: updatedUser })
+        }
+      },
+      
       signin: async (email: string, password: string) => {
         set({ isLoading: true, error: null })
         try {
@@ -194,22 +212,6 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null
           })
-        }
-      },
-
-      setUser: (user: User | null) => {
-        set({ 
-          user,
-          isAuthenticated: !!user,
-          isLoading: false
-        })
-      },
-
-      updateUser: (updates: Partial<User>) => {
-        const currentUser = get().user
-        if (currentUser) {
-          const updatedUser = { ...currentUser, ...updates }
-          set({ user: updatedUser })
         }
       },
 
