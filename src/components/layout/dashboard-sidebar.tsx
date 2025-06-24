@@ -46,9 +46,9 @@ const secondaryNavigation = [
 export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   const pathname = usePathname()
   const { user: authUser, signout, setUser } = useAuthStore()
-  const { data: userData, refetch } = useCurrentUser()
+  const { data: userData } = useCurrentUser()
   const router = useRouter()
-  const [userKey, setUserKey] = useState(0) // Force re-render key
+  const [userKey, setUserKey] = useState(0)
 
   // Use the most up-to-date user data
   const user = userData?.user || authUser
@@ -56,10 +56,9 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   // Listen for profile picture updates
   useEffect(() => {
     const handleProfileUpdate = (event: CustomEvent) => {
-      console.log('Sidebar received profile update event:', event.detail)
       if (event.detail?.user) {
         setUser(event.detail.user)
-        setUserKey(prev => prev + 1) // Force re-render
+        setUserKey(prev => prev + 1)
       }
     }
 
@@ -73,7 +72,6 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   const handleSignOut = async () => {
     try {
       await signout()
-      // Clear any remaining data
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
@@ -82,7 +80,6 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
       router.push('/')
     } catch (error) {
       console.error('Signout error:', error)
-      // Force cleanup even if API fails
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
@@ -101,7 +98,6 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
       url = url.replace(/=s\d+-c$/, '=s400-c')
     }
     
-    console.log('Sidebar getting profile picture URL:', url, 'for user:', user?.email)
     return url || null
   }
 
@@ -226,7 +222,7 @@ function SidebarContent({
         <div className="flex items-center space-x-3">
           <div 
             className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium overflow-hidden"
-            key={`sidebar-avatar-${userKey}-${user?.profile_picture}`} // Force re-render when profile changes
+            key={`sidebar-avatar-${userKey}-${user?.profile_picture}`}
           >
             {getProfilePictureUrl() ? (
               <Image
@@ -238,9 +234,7 @@ function SidebarContent({
                 className="w-full h-full object-cover"
                 crossOrigin="anonymous"
                 referrerPolicy="no-referrer"
-                onLoad={() => console.log('Sidebar profile image loaded:', getProfilePictureUrl())}
                 onError={(e) => {
-                  console.log('Sidebar profile image failed to load, falling back to initials')
                   const target = e.target as HTMLImageElement
                   const parent = target.parentElement
                   if (parent) {

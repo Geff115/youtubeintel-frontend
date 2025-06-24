@@ -68,24 +68,19 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   // Listen for profile picture updates
   useEffect(() => {
     const handleProfileUpdate = (event: CustomEvent) => {
-      console.log('Header received profile update event:', event.detail)
       if (event.detail?.user) {
         setUser(event.detail.user)
-        setUserKey(prev => prev + 1) // Force re-render
-        refetch() // Also refetch to be sure
+        setUserKey(prev => prev + 1)
+        refetch()
       }
     }
 
-    // Listen for custom profile update events
-    window.addEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
-    
-    // Also listen for storage changes (in case other tabs update the user)
     const handleStorageChange = () => {
-      console.log('Storage changed, refreshing user data')
       refetch()
       setUserKey(prev => prev + 1)
     }
     
+    window.addEventListener('profilePictureUpdated', handleProfileUpdate as EventListener)
     window.addEventListener('storage', handleStorageChange)
     
     return () => {
@@ -106,7 +101,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   const handleSignOut = async () => {
     try {
       await signout()
-      // Clear any remaining data
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
@@ -143,12 +137,12 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
   const connectionDisplay = getConnectionStatusDisplay()
 
-  // Calculate number of active jobs (customize this logic as needed)
+  // Calculate number of active jobs
   const activeJobs = Array.isArray(jobUpdates)
     ? jobUpdates.filter((job: any) => job.status === 'running' || job.status === 'processing').length
     : 0;
 
-  // Calculate number of recent updates (jobs or credits)
+  // Calculate number of recent updates
   const recentUpdates =
     (Array.isArray(jobUpdates) ? jobUpdates.filter((job: any) => job.status === 'completed' && !job.seen).length : 0) +
     (Array.isArray(creditUpdates) ? creditUpdates.filter((credit: any) => !credit.seen).length : 0);
@@ -159,12 +153,9 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
     
     // Fix Google profile picture URLs by removing size restrictions
     if (url && url.includes('googleusercontent.com')) {
-      // Remove size parameter to get full resolution
       url = url.replace(/=s\d+-c$/, '=s400-c')
-      console.log('Fixed Google profile picture URL:', url)
     }
     
-    console.log('Header getting profile picture URL:', url, 'for user:', currentUser?.email)
     return url || null
   }
 
@@ -201,7 +192,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
         <div className="flex items-center justify-between h-16">
           {/* Left side */}
           <div className="flex items-center space-x-4">
-            {/* Mobile menu button */}
             <Button
               variant="ghost"
               size="sm"
@@ -211,7 +201,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
               <Menu className="h-5 w-5" />
             </Button>
 
-            {/* Page title */}
             <div className="hidden sm:block">
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {pageTitle}
@@ -235,7 +224,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
             </div>
           </div>
 
-          {/* Center - Search (desktop only) */}
+          {/* Center - Search */}
           <div className="hidden md:block flex-1 max-w-md mx-8">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -251,7 +240,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
           {/* Right side */}
           <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Credits display (mobile-friendly) */}
+            {/* Credits display */}
             <Link href="/dashboard/credits">
               <Button variant="outline" size="sm" className="hidden sm:flex">
                 <CreditCard className="h-4 w-4 mr-2" />
@@ -264,25 +253,25 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
             {/* Notifications */}
             <div className="relative">
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="h-5 w-5" />
-              {recentUpdates > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                >
-                  {recentUpdates}
-                </Badge>
-              )}
-            </Button>
-          </div>
+              <Button variant="ghost" size="sm" className="relative">
+                <Bell className="h-5 w-5" />
+                {recentUpdates > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                  >
+                    {recentUpdates}
+                  </Badge>
+                )}
+              </Button>
+            </div>
 
-            {/* Theme toggle (hidden on mobile) */}
+            {/* Theme toggle */}
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>
 
-            {/* User menu - key prop forces re-render when user changes */}
+            {/* User menu */}
             <DropdownMenu key={`user-menu-${userKey}-${currentUser?.profile_picture}`}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center space-x-2 p-2">
@@ -294,13 +283,10 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                         src={getProfilePictureUrl()!} 
                         alt="Profile" 
                         className="w-full h-full object-cover"
-                        key={`profile-img-${userKey}-${currentUser?.profile_picture}`} // Force image refresh
-                        crossOrigin="anonymous" // Add CORS support for external images
-                        referrerPolicy="no-referrer" // Help with external image loading
-                        onLoad={() => console.log('Profile image loaded successfully:', getProfilePictureUrl())}
+                        key={`profile-img-${userKey}-${currentUser?.profile_picture}`}
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
                         onError={(e) => {
-                          console.log('Profile image failed to load:', getProfilePictureUrl())
-                          console.log('Error details:', e)
                           // Fallback to initials if image fails to load
                           const target = e.target as HTMLImageElement
                           const parent = target.parentElement
@@ -328,10 +314,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {currentUser?.email}
-                    </p>
-                    {/* Debug info - remove in production */}
-                    <p className="text-xs text-blue-500">
-                      {currentUser?.profile_picture ? 'Has Profile Pic' : 'No Profile Pic'}
                     </p>
                   </div>
                 </DropdownMenuLabel>

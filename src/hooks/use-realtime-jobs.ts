@@ -53,8 +53,12 @@ export interface RealtimeState {
   connectionStatus: ConnectionStatus | null
 }
 
+// Global socket instance to prevent multiple connections
+let globalSocket: Socket | null = null
+let isConnecting = false
+let lastConnectionAttempt = 0
+
 export function useRealtimeJobs() {
-  const [socket, setSocket] = useState<Socket | null>(null)
   const [connected, setConnected] = useState(false)
   const [jobUpdates, setJobUpdates] = useState<JobUpdate[]>([])
   const [completedJobs, setCompletedJobs] = useState<JobCompleted[]>([])
@@ -64,9 +68,8 @@ export function useRealtimeJobs() {
   
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
-  const reconnectAttemptsRef = useRef(0)
-  const maxReconnectAttempts = 5
-  const connectionTimeoutRef = useRef<NodeJS.Timeout>()
+  const componentIdRef = useRef(Math.random().toString(36).substr(2, 9))
+  const stableConnectionRef = useRef(false)
 
   const getAuthToken = useCallback(() => {
     return localStorage.getItem('access_token')
@@ -88,98 +91,64 @@ export function useRealtimeJobs() {
     }
   }, [])
 
-  const connect = useCallback(() => {
-    if (!user || connected) return
-
-    const token = getAuthToken()
-    if (!token) {
-      console.warn('No auth token available for WebSocket connection')
-      return
-    }
-
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://youtubeintel-backend.onrender.com'
-      : 'http://localhost:5000'
-
-    console.log('Connecting to WebSocket:', socketUrl)
-
-    const newSocket = io(socketUrl, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      timeout: 20000,
-      autoConnect: true,
-      reconnection: true,
-      reconnectionDelay: 2000,
-      reconnectionAttempts: maxReconnectAttempts
-    })
+  const setupSocketEventListeners = useCallback((socket: Socket) => {
+    // Remove any existing listeners to prevent duplicates
+    socket.removeAllListeners()
 
     // Connection Events
-    newSocket.on('connect', () => {
-      console.log('✅ WebSocket connected:', newSocket.id)
+    socket.on('connect', () => {
+      console.log('✅ WebSocket connected:', socket.id, `Component: ${componentIdRef.current}`)
       setConnected(true)
-      reconnectAttemptsRef.current = 0
-      
-      // Clear connection timeout
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current)
-      }
+      stableConnectionRef.current = true
+      isConnecting = false
     })
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket disconnected:', reason)
+    socket.on('disconnect', (reason) => {
+      console.log('❌ WebSocket disconnected:', reason, `Component: ${componentIdRef.current}`)
       setConnected(false)
+      stableConnectionRef.current = false
       
-      if (reason === 'io server disconnect') {
-        // Server disconnected, don't reconnect automatically
+      // Don't auto-reconnect for certain reasons
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        console.log('🛑 Server initiated disconnect, not reconnecting')
         return
       }
-      
-      if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-        reconnectAttemptsRef.current++
-        console.log(`🔄 Reconnecting attempt ${reconnectAttemptsRef.current}...`)
-      }
     })
 
-    newSocket.on('connect_error', (error) => {
-      console.error('🔴 WebSocket connection error:', error)
+    socket.on('connect_error', (error) => {
+      console.error('🔴 WebSocket connection error:', error, `Component: ${componentIdRef.current}`)
       setConnected(false)
+      stableConnectionRef.current = false
+      isConnecting = false
     })
 
     // Status Events
-    newSocket.on('connection_status', (data: ConnectionStatus) => {
+    socket.on('connection_status', (data: ConnectionStatus) => {
       console.log('📡 Connection status:', data)
       setConnectionStatus(data)
     })
 
     // Job Events
-    newSocket.on('job_update', (data: JobUpdate) => {
+    socket.on('job_update', (data: JobUpdate) => {
       console.log('📊 Job update:', data)
       setJobUpdates(prev => {
         const filtered = prev.filter(job => job.job_id !== data.job_id)
         return [...filtered, data].slice(-20)
       })
       
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['job-status', data.job_id] })
-      
-      // Show progress notification for running jobs
-      if (data.status === 'running' && data.progress) {
-        console.log(`Job ${data.job_id} progress: ${data.progress}%`)
-      }
     })
 
-    newSocket.on('job_completed', (data: JobCompleted) => {
+    socket.on('job_completed', (data: JobCompleted) => {
       console.log('✅ Job completed:', data)
       setCompletedJobs(prev => [data, ...prev].slice(0, 10))
       
-      // Show success notification
       showNotification(
         `Job Completed: ${data.job_type}`,
         data.message
       )
       
-      // Refresh relevant queries
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['channels'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
@@ -187,11 +156,10 @@ export function useRealtimeJobs() {
     })
 
     // Credit Events
-    newSocket.on('credits_updated', (data: CreditsUpdate) => {
+    socket.on('credits_updated', (data: CreditsUpdate) => {
       console.log('💰 Credits updated:', data)
       setCreditUpdates(prev => [data, ...prev].slice(0, 10))
       
-      // Show notification for credit purchases
       if (data.type === 'purchase') {
         showNotification(
           'Credits Purchased!',
@@ -199,65 +167,124 @@ export function useRealtimeJobs() {
         )
       }
       
-      // Refresh credit balance
       queryClient.invalidateQueries({ queryKey: ['current-user'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     })
 
     // Discovery Events
-    newSocket.on('discovery_results', (data: DiscoveryResults) => {
+    socket.on('discovery_results', (data: DiscoveryResults) => {
       console.log('🔍 Discovery results:', data)
       setDiscoveryResults(prev => [data, ...prev].slice(0, 10))
       
-      // Show discovery notification
       showNotification(
         'Channel Discovery Complete!',
         `Found ${data.channel_count} channels via ${data.discovery_method}`
       )
       
-      // Refresh discovery queries
       queryClient.invalidateQueries({ queryKey: ['channels'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       queryClient.invalidateQueries({ queryKey: ['discovery-results'] })
     })
 
     // Error handling
-    newSocket.on('error', (error) => {
+    socket.on('error', (error) => {
       console.error('🔴 WebSocket error:', error)
     })
+  }, [queryClient, showNotification])
 
-    setSocket(newSocket)
-    
+  const connect = useCallback(() => {
+    // Prevent multiple connections and rate limit attempts
+    const now = Date.now()
+    if (isConnecting || !user || (now - lastConnectionAttempt < 3000)) {
+      console.log('⏭️ Skipping connection - rate limited or already connecting')
+      return
+    }
+
+    const token = getAuthToken()
+    if (!token) {
+      console.warn('No auth token available for WebSocket connection')
+      return
+    }
+
+    // Use existing global socket if available and connected
+    if (globalSocket && globalSocket.connected && stableConnectionRef.current) {
+      console.log('♻️ Reusing existing stable WebSocket connection')
+      setConnected(true)
+      setupSocketEventListeners(globalSocket)
+      return
+    }
+
+    // Clean up existing socket if not connected
+    if (globalSocket) {
+      console.log('🧹 Cleaning up existing socket')
+      globalSocket.removeAllListeners()
+      globalSocket.disconnect()
+      globalSocket = null
+    }
+
+    isConnecting = true
+    lastConnectionAttempt = now
+
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL || (
+      process.env.NODE_ENV === 'production' 
+        ? 'https://youtubeintel-backend.onrender.com'
+        : 'http://localhost:5000'
+    )
+
+    console.log(`🔌 Connecting to WebSocket: ${socketUrl} (Component: ${componentIdRef.current})`)
+
+    const newSocket = io(socketUrl, {
+      auth: { token },
+      transports: ['polling', 'websocket'], // Start with polling, upgrade to websocket
+      timeout: 20000,
+      autoConnect: true,
+      forceNew: true, // Always create new connection
+      reconnection: false, // Handle reconnection manually to prevent loops
+      upgrade: true,
+      rememberUpgrade: false,
+      query: { token }, // Also send token as query parameter for polling transport
+      extraHeaders: {
+        'Authorization': `Bearer ${token}` // Send as header too
+      }
+    })
+
+    globalSocket = newSocket
+    setupSocketEventListeners(newSocket)
+
     // Set connection timeout
-    connectionTimeoutRef.current = setTimeout(() => {
+    setTimeout(() => {
       if (!newSocket.connected) {
         console.warn('⏰ WebSocket connection timeout')
+        isConnecting = false
         newSocket.disconnect()
       }
-    }, 30000) // 30 second timeout
+    }, 25000)
 
-  }, [user, connected, getAuthToken, queryClient, showNotification])
+  }, [user, getAuthToken, setupSocketEventListeners])
 
   const disconnect = useCallback(() => {
-    if (socket) {
-      console.log('🔌 Disconnecting WebSocket')
-      socket.disconnect()
-      setSocket(null)
-      setConnected(false)
-      setConnectionStatus(null)
-      
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current)
-      }
+    console.log(`🔌 Disconnecting WebSocket (Component: ${componentIdRef.current})`)
+    
+    if (globalSocket) {
+      globalSocket.removeAllListeners()
+      globalSocket.disconnect()
+      globalSocket = null
     }
-  }, [socket])
+    
+    setConnected(false)
+    setConnectionStatus(null)
+    stableConnectionRef.current = false
+    isConnecting = false
+  }, [])
 
   const subscribeToJob = useCallback((jobId: string) => {
-    if (socket && connected) {
+    if (globalSocket && globalSocket.connected) {
       console.log(`📝 Subscribing to job updates: ${jobId}`)
-      socket.emit('subscribe_to_job', { job_id: jobId })
+      globalSocket.emit('subscribe_to_job', { job_id: jobId })
+    } else {
+      console.warn('Cannot subscribe to job - WebSocket not connected')
     }
-  }, [socket, connected])
+  }, [])
 
   const clearHistory = useCallback(() => {
     setJobUpdates([])
@@ -266,40 +293,40 @@ export function useRealtimeJobs() {
     setDiscoveryResults([])
   }, [])
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection only once per component
   useEffect(() => {
-    if (user && !socket) {
-      requestNotificationPermission()
-      connect()
-    }
-    
-    return () => {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current)
+    if (user && !isConnecting && !stableConnectionRef.current) {
+      const timeoutId = setTimeout(() => {
+        requestNotificationPermission()
+        connect()
+      }, 1000) // Delay to prevent race conditions
+
+      return () => {
+        clearTimeout(timeoutId)
       }
     }
-  }, [user, socket, connect, requestNotificationPermission])
+  }, [user, connect, requestNotificationPermission])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      disconnect()
+      console.log(`🧹 Component unmounting (${componentIdRef.current})`)
+      // Don't disconnect global socket here - other components might be using it
     }
-  }, [disconnect])
+  }, [])
 
-  // Auto-reconnect when user changes
+  // Handle auth changes
   useEffect(() => {
-    if (user && socket && !connected) {
-      console.log('🔄 User changed, reconnecting WebSocket')
+    if (!user && globalSocket) {
+      console.log('👤 User logged out, disconnecting WebSocket')
       disconnect()
-      setTimeout(connect, 1000)
     }
-  }, [user, socket, connected, disconnect, connect])
+  }, [user, disconnect])
 
   return {
     // Connection state
     connected,
-    socket,
+    socket: globalSocket,
     connectionStatus,
     
     // Event data
@@ -313,13 +340,9 @@ export function useRealtimeJobs() {
     disconnect,
     subscribeToJob,
     clearHistory,
-    clearJobUpdates: () => setJobUpdates([]),
-    clearCompletedJobs: () => setCompletedJobs([]),
-    clearCreditUpdates: () => setCreditUpdates([]),
-    clearDiscoveryResults: () => setDiscoveryResults([]),
     
     // Utilities
-    reconnectAttempts: reconnectAttemptsRef.current,
-    maxReconnectAttempts
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 3
   }
 }

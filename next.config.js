@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: false,
   // Use experimental.serverComponentsExternalPackages for Next.js 14
   experimental: {
     serverComponentsExternalPackages: ['bcryptjs']

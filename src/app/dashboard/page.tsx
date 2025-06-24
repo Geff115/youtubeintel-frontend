@@ -23,6 +23,7 @@ import { JobsOverview } from '@/components/dashboard/jobs-overview'
 import { useDashboardOverview } from '@/hooks/use-dashboard-data'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import Link from 'next/link'
+import { WebSocketConnectionMonitor } from '@/components/websocket-connection-monitor'
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState('7d')
@@ -95,6 +96,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <WebSocketConnectionMonitor />
       {/* Header with quick actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
