@@ -11,13 +11,15 @@ import {
   Settings,
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  Circle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useAuthStore } from '@/stores/auth-store'
 import { useCurrentUser } from '@/hooks/use-dashboard-data'
+import { useConnectionStatus, useJobUpdates, useCreditUpdates } from '@/components/websocket-provider'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
 interface DashboardHeaderProps {
@@ -52,6 +55,11 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [userKey, setUserKey] = useState(0) // Force re-render key
 
+  // WebSocket status and notifications
+  const { connected, connectionStatus, reconnectAttempts, maxReconnectAttempts } = useConnectionStatus()
+  const { jobUpdates } = useJobUpdates()
+  const creditUpdates = useCreditUpdates()
+  
   const pageTitle = pageTitles[pathname] || 'Dashboard'
   
   // Always use the freshest user data available
@@ -109,6 +117,41 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
       router.push('/auth/signin')
     }
   }
+
+  // Handler to display websockets connection status
+  const getConnectionStatusDisplay = () => {
+    if (connected) {
+      return {
+        icon: <Circle className="w-3 h-3 fill-green-500 text-green-500" />,
+        text: 'Connected',
+        color: 'text-green-600'
+      }
+    } else if (reconnectAttempts > 0 && reconnectAttempts < maxReconnectAttempts) {
+      return {
+        icon: <Circle className="w-3 h-3 fill-yellow-500 text-yellow-500 animate-pulse" />,
+        text: `Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})`,
+        color: 'text-yellow-600'
+      }
+    } else {
+      return {
+        icon: <Circle className="w-3 h-3 fill-red-500 text-red-500" />,
+        text: 'Disconnected',
+        color: 'text-red-600'
+      }
+    }
+  }
+
+  const connectionDisplay = getConnectionStatusDisplay()
+
+  // Calculate number of active jobs (customize this logic as needed)
+  const activeJobs = Array.isArray(jobUpdates)
+    ? jobUpdates.filter((job: any) => job.status === 'running' || job.status === 'processing').length
+    : 0;
+
+  // Calculate number of recent updates (jobs or credits)
+  const recentUpdates =
+    (Array.isArray(jobUpdates) ? jobUpdates.filter((job: any) => job.status === 'completed' && !job.seen).length : 0) +
+    (Array.isArray(creditUpdates) ? creditUpdates.filter((credit: any) => !credit.seen).length : 0);
 
   // Get profile picture URL with fallback
   const getProfilePictureUrl = () => {
@@ -173,6 +216,22 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {pageTitle}
               </h1>
+
+              {/* WebSocket Connection Status */}
+              <div className="flex items-center space-x-1 mt-0.5">
+                {connectionDisplay.icon}
+                <span className={cn("text-xs", connectionDisplay.color)}>
+                  {connectionDisplay.text}
+                </span>
+                {activeJobs > 0 && (
+                  <>
+                    <span className="text-xs text-slate-400">•</span>
+                    <span className="text-xs text-blue-600">
+                      {activeJobs} job{activeJobs !== 1 ? 's' : ''} running
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -204,15 +263,19 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
             </Link>
 
             {/* Notifications */}
+            <div className="relative">
             <Button variant="ghost" size="sm" className="relative">
               <Bell className="h-5 w-5" />
-              <Badge 
-                variant="destructive" 
-                className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
-              >
-                2
-              </Badge>
+              {recentUpdates > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                >
+                  {recentUpdates}
+                </Badge>
+              )}
             </Button>
+          </div>
 
             {/* Theme toggle (hidden on mobile) */}
             <div className="hidden sm:block">

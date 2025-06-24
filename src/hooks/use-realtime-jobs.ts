@@ -37,6 +37,22 @@ interface DiscoveryResults {
   timestamp: string
 }
 
+interface ConnectionStatus {
+  status: 'connected' | 'disconnected' | 'reconnecting'
+  user_id?: string
+  timestamp: string
+}
+
+export interface RealtimeState {
+  connected: boolean
+  socket: Socket | null
+  jobUpdates: JobUpdate[]
+  completedJobs: JobCompleted[]
+  creditUpdates: CreditsUpdate[]
+  discoveryResults: DiscoveryResults[]
+  connectionStatus: ConnectionStatus | null
+}
+
 export function useRealtimeJobs() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [connected, setConnected] = useState(false)
@@ -44,17 +60,36 @@ export function useRealtimeJobs() {
   const [completedJobs, setCompletedJobs] = useState<JobCompleted[]>([])
   const [creditUpdates, setCreditUpdates] = useState<CreditsUpdate[]>([])
   const [discoveryResults, setDiscoveryResults] = useState<DiscoveryResults[]>([])
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
+  
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const reconnectAttemptsRef = useRef(0)
   const maxReconnectAttempts = 5
+  const connectionTimeoutRef = useRef<NodeJS.Timeout>()
 
   const getAuthToken = useCallback(() => {
     return localStorage.getItem('access_token')
   }, [])
 
+  const requestNotificationPermission = useCallback(async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      await Notification.requestPermission()
+    }
+  }, [])
+
+  const showNotification = useCallback((title: string, body: string, icon?: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: icon || '/favicon.ico',
+        badge: '/favicon.ico'
+      })
+    }
+  }, [])
+
   const connect = useCallback(() => {
-    if (!user || connected) return  // Use connected state instead of socket?.connected
+    if (!user || connected) return
 
     const token = getAuthToken()
     if (!token) {
@@ -72,20 +107,28 @@ export function useRealtimeJobs() {
       auth: { token },
       transports: ['websocket', 'polling'],
       timeout: 20000,
-      autoConnect: true
+      autoConnect: true,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionAttempts: maxReconnectAttempts
     })
 
+    // Connection Events
     newSocket.on('connect', () => {
       console.log('✅ WebSocket connected:', newSocket.id)
-      setConnected(true) // Update state
+      setConnected(true)
       reconnectAttemptsRef.current = 0
+      
+      // Clear connection timeout
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+      }
     })
 
     newSocket.on('disconnect', (reason) => {
       console.log('❌ WebSocket disconnected:', reason)
-      setConnected(false) // Update state
+      setConnected(false)
       
-      // Attempt to reconnect if disconnected unexpectedly
       if (reason === 'io server disconnect') {
         // Server disconnected, don't reconnect automatically
         return
@@ -93,123 +136,149 @@ export function useRealtimeJobs() {
       
       if (reconnectAttemptsRef.current < maxReconnectAttempts) {
         reconnectAttemptsRef.current++
-        setTimeout(() => {
-          console.log(`🔄 Reconnecting attempt ${reconnectAttemptsRef.current}...`)
-          newSocket.connect()
-        }, 2000 * reconnectAttemptsRef.current) // Exponential backoff
+        console.log(`🔄 Reconnecting attempt ${reconnectAttemptsRef.current}...`)
       }
     })
 
-    newSocket.on('connection_status', (data) => {
-      console.log('📡 Connection status:', data)
+    newSocket.on('connect_error', (error) => {
+      console.error('🔴 WebSocket connection error:', error)
+      setConnected(false)
     })
 
+    // Status Events
+    newSocket.on('connection_status', (data: ConnectionStatus) => {
+      console.log('📡 Connection status:', data)
+      setConnectionStatus(data)
+    })
+
+    // Job Events
     newSocket.on('job_update', (data: JobUpdate) => {
       console.log('📊 Job update:', data)
       setJobUpdates(prev => {
         const filtered = prev.filter(job => job.job_id !== data.job_id)
-        return [...filtered, data].slice(-20) // Keep last 20 updates
+        return [...filtered, data].slice(-20)
       })
       
-      // Invalidate job queries to refresh UI
+      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['job-status', data.job_id] })
+      
+      // Show progress notification for running jobs
+      if (data.status === 'running' && data.progress) {
+        console.log(`Job ${data.job_id} progress: ${data.progress}%`)
+      }
     })
 
     newSocket.on('job_completed', (data: JobCompleted) => {
       console.log('✅ Job completed:', data)
-      setCompletedJobs(prev => [data, ...prev].slice(0, 10)) // Keep last 10
+      setCompletedJobs(prev => [data, ...prev].slice(0, 10))
       
       // Show success notification
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`Job Completed: ${data.job_type}`, {
-          body: data.message,
-          icon: '/favicon.ico'
-        })
-      }
+      showNotification(
+        `Job Completed: ${data.job_type}`,
+        data.message
+      )
       
       // Refresh relevant queries
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['channels'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['discovery-results'] })
     })
 
+    // Credit Events
     newSocket.on('credits_updated', (data: CreditsUpdate) => {
       console.log('💰 Credits updated:', data)
       setCreditUpdates(prev => [data, ...prev].slice(0, 10))
       
       // Show notification for credit purchases
-      if (data.type === 'purchase' && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification('Credits Purchased!', {
-          body: `+${data.amount} credits added to your account`,
-          icon: '/favicon.ico'
-        })
+      if (data.type === 'purchase') {
+        showNotification(
+          'Credits Purchased!',
+          `${data.amount} credits added to your account`
+        )
       }
       
-      // Refresh user data and credit balance
+      // Refresh credit balance
       queryClient.invalidateQueries({ queryKey: ['current-user'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     })
 
+    // Discovery Events
     newSocket.on('discovery_results', (data: DiscoveryResults) => {
       console.log('🔍 Discovery results:', data)
       setDiscoveryResults(prev => [data, ...prev].slice(0, 10))
       
-      // Show notification
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('New Channels Discovered!', {
-          body: data.message,
-          icon: '/favicon.ico'
-        })
-      }
+      // Show discovery notification
+      showNotification(
+        'Channel Discovery Complete!',
+        `Found ${data.channel_count} channels via ${data.discovery_method}`
+      )
       
-      // Refresh channels data
+      // Refresh discovery queries
       queryClient.invalidateQueries({ queryKey: ['channels'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['discovery-results'] })
     })
 
+    // Error handling
     newSocket.on('error', (error) => {
-      console.error('❌ WebSocket error:', error)
+      console.error('🔴 WebSocket error:', error)
     })
 
     setSocket(newSocket)
+    
+    // Set connection timeout
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (!newSocket.connected) {
+        console.warn('⏰ WebSocket connection timeout')
+        newSocket.disconnect()
+      }
+    }, 30000) // 30 second timeout
 
-    return newSocket
-  }, [user, queryClient, getAuthToken, connected])
+  }, [user, connected, getAuthToken, queryClient, showNotification])
 
   const disconnect = useCallback(() => {
     if (socket) {
       console.log('🔌 Disconnecting WebSocket')
       socket.disconnect()
       setSocket(null)
-      setConnected(false) // Update state
+      setConnected(false)
+      setConnectionStatus(null)
+      
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+      }
     }
   }, [socket])
 
   const subscribeToJob = useCallback((jobId: string) => {
     if (socket && connected) {
-        console.log('🔔 Subscribing to job:', jobId)
-        socket.emit('subscribe_to_job', { job_id: jobId })
+      console.log(`📝 Subscribing to job updates: ${jobId}`)
+      socket.emit('subscribe_to_job', { job_id: jobId })
     }
   }, [socket, connected])
 
-  // Request notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
+  const clearHistory = useCallback(() => {
+    setJobUpdates([])
+    setCompletedJobs([])
+    setCreditUpdates([])
+    setDiscoveryResults([])
   }, [])
 
-  // Connect when user is available
+  // Initialize WebSocket connection
   useEffect(() => {
-    if (user) {
+    if (user && !socket) {
+      requestNotificationPermission()
       connect()
-    } else {
-      disconnect()
     }
-
-    return () => disconnect()
-  }, [user, connect, disconnect])
+    
+    return () => {
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current)
+      }
+    }
+  }, [user, socket, connect, requestNotificationPermission])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -218,19 +287,39 @@ export function useRealtimeJobs() {
     }
   }, [disconnect])
 
+  // Auto-reconnect when user changes
+  useEffect(() => {
+    if (user && socket && !connected) {
+      console.log('🔄 User changed, reconnecting WebSocket')
+      disconnect()
+      setTimeout(connect, 1000)
+    }
+  }, [user, socket, connected, disconnect, connect])
+
   return {
-    socket,
+    // Connection state
     connected,
+    socket,
+    connectionStatus,
+    
+    // Event data
     jobUpdates,
     completedJobs,
     creditUpdates,
     discoveryResults,
-    subscribeToJob,
+    
+    // Actions
     connect,
     disconnect,
+    subscribeToJob,
+    clearHistory,
     clearJobUpdates: () => setJobUpdates([]),
     clearCompletedJobs: () => setCompletedJobs([]),
     clearCreditUpdates: () => setCreditUpdates([]),
-    clearDiscoveryResults: () => setDiscoveryResults([])
+    clearDiscoveryResults: () => setDiscoveryResults([]),
+    
+    // Utilities
+    reconnectAttempts: reconnectAttemptsRef.current,
+    maxReconnectAttempts
   }
 }
