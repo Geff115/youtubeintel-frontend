@@ -54,7 +54,7 @@ export function useRealtimeJobs() {
   }, [])
 
   const connect = useCallback(() => {
-    if (!user || socket?.connected) return
+    if (!user || connected) return  // Use connected state instead of socket?.connected
 
     const token = getAuthToken()
     if (!token) {
@@ -77,13 +77,13 @@ export function useRealtimeJobs() {
 
     newSocket.on('connect', () => {
       console.log('✅ WebSocket connected:', newSocket.id)
-      setConnected(true)
+      setConnected(true) // Update state
       reconnectAttemptsRef.current = 0
     })
 
     newSocket.on('disconnect', (reason) => {
       console.log('❌ WebSocket disconnected:', reason)
-      setConnected(false)
+      setConnected(false) // Update state
       
       // Attempt to reconnect if disconnected unexpectedly
       if (reason === 'io server disconnect') {
@@ -175,21 +175,21 @@ export function useRealtimeJobs() {
     setSocket(newSocket)
 
     return newSocket
-  }, [user, queryClient, getAuthToken])
+  }, [user, queryClient, getAuthToken, connected])
 
   const disconnect = useCallback(() => {
     if (socket) {
       console.log('🔌 Disconnecting WebSocket')
       socket.disconnect()
       setSocket(null)
-      setConnected(false)
+      setConnected(false) // Update state
     }
   }, [socket])
 
   const subscribeToJob = useCallback((jobId: string) => {
     if (socket && connected) {
-      console.log('🔔 Subscribing to job:', jobId)
-      socket.emit('subscribe_to_job', { job_id: jobId })
+        console.log('🔔 Subscribing to job:', jobId)
+        socket.emit('subscribe_to_job', { job_id: jobId })
     }
   }, [socket, connected])
 
