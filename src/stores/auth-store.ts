@@ -305,15 +305,21 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           const response = await authAPI.getMe()
+          console.log('Response:', response)
           set({ 
             user: response.user, 
             isAuthenticated: true, 
             isLoading: false 
           })
         } catch (error: any) {
+          console.error('GetMe error details:', error);
           // If fetching user fails, clear auth state
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
+          if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+          }
           set({ 
             user: null, 
             isAuthenticated: false, 

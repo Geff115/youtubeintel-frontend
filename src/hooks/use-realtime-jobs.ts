@@ -234,17 +234,17 @@ export function useRealtimeJobs() {
     console.log(`🔌 Connecting to WebSocket: ${socketUrl} (Component: ${componentIdRef.current})`)
 
     const newSocket = io(socketUrl, {
-      auth: { token },
-      transports: ['polling', 'websocket'], // Start with polling, upgrade to websocket
+      auth: { token: token.replace('Bearer ', '') }, // Remove Bearer prefix
+      transports: ['websocket'],  // Force websockets
       timeout: 20000,
       autoConnect: true,
-      forceNew: true, // Always create new connection
-      reconnection: false, // Handle reconnection manually to prevent loops
-      upgrade: true,
-      rememberUpgrade: false,
-      query: { token }, // Also send token as query parameter for polling transport
+      forceNew: false,
+      reconnection: true,  // Enable reconnection
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      query: { token: token.replace('Bearer ', '') }, // Also remove Bearer here
       extraHeaders: {
-        'Authorization': `Bearer ${token}` // Send as header too
+        'Authorization': token  // Keeping Bearer here
       }
     })
 

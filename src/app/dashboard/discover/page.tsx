@@ -159,7 +159,11 @@ export default function DiscoveryPageWithWebSocket() {
           }
         })
 
-      const response = await fetch('/api/discover-channels', {
+        console.log(`Source_channel_id: ${channelIds}`);
+        console.log(`Methods: ${selectedMethods}`)
+        console.log(`Limit: ${limit}`)
+
+        const response = await fetch('/api/discover-channels', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
